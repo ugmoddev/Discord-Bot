@@ -1389,14 +1389,14 @@ async function handleDeCommand(message, args) {
     const result = generateLotteryResult();
     const isWin = checkLotteryWin(betNumber, result);
     let reward = 0;
-    let message = '';
+    let resultMessage = '';
     
     if (isWin) {
         reward = calculateLotteryReward(betNumber, result, betAmount);
         addMoney(userId, reward);
-        message = `🎉 **TRÚNG ĐỀ!** Số ${betNumber} đã về!\n💰 Bạn nhận được ${formatMoney(reward)}`;
+        resultMessage = `🎉 **TRÚNG ĐỀ!** Số ${betNumber} đã về!\n💰 Bạn nhận được ${formatMoney(reward)}`;
     } else {
-        message = `😢 Không trúng! Số ${betNumber} không về.\n💸 Bạn mất ${formatMoney(betAmount)}`;
+        resultMessage = `😢 Không trúng! Số ${betNumber} không về.\n💸 Bạn mất ${formatMoney(betAmount)}`;
     }
     
     const embed = createEmbed(
@@ -1404,7 +1404,7 @@ async function handleDeCommand(message, args) {
         `**Giải Đặc Biệt:** ${result.special}\n**Giải Nhất:** ${result.first}\n**Giải Nhì:** ${result.second.join(' - ')}\n**Giải Ba:** ${result.third.join(' - ')}`,
         isWin ? COLORS.SUCCESS : COLORS.ERROR,
         [
-            { name: '📊 Kết quả', value: message, inline: false },
+            { name: '📊 Kết quả', value: resultMessage, inline: false },
             { name: '💰 Số dư mới', value: formatMoney(getBalance(userId)), inline: true }
         ]
     );
@@ -1440,14 +1440,14 @@ async function handleLoCommand(message, args) {
     const result = generateLotteryResult();
     const isWin = checkLotteryWin(betNumber, result);
     let reward = 0;
-    let message = '';
+    let resultMessage = '';
     
     if (isWin) {
         reward = calculateLotteryReward(betNumber, result, betAmount);
         addMoney(userId, reward);
-        message = `🎉 **TRÚNG LÔ!** Số ${betNumber} đã về!\n💰 Bạn nhận được ${formatMoney(reward)}`;
+        resultMessage = `🎉 **TRÚNG LÔ!** Số ${betNumber} đã về!\n💰 Bạn nhận được ${formatMoney(reward)}`;
     } else {
-        message = `😢 Không trúng! Số ${betNumber} không về.\n💸 Bạn mất ${formatMoney(betAmount)}`;
+        resultMessage = `😢 Không trúng! Số ${betNumber} không về.\n💸 Bạn mất ${formatMoney(betAmount)}`;
     }
     
     const embed = createEmbed(
@@ -1455,7 +1455,7 @@ async function handleLoCommand(message, args) {
         `**Giải Đặc Biệt:** ${result.special}\n**Giải Nhất:** ${result.first}\n**Giải Nhì:** ${result.second.join(' - ')}\n**Giải Ba:** ${result.third.join(' - ')}`,
         isWin ? COLORS.SUCCESS : COLORS.ERROR,
         [
-            { name: '📊 Kết quả', value: message, inline: false },
+            { name: '📊 Kết quả', value: resultMessage, inline: false },
             { name: '💰 Số dư mới', value: formatMoney(getBalance(userId)), inline: true }
         ]
     );
@@ -1492,14 +1492,14 @@ async function handleTaiXiuCommand(message, args) {
     const result = game.roll();
     const isWin = game.checkWin();
     let reward = 0;
-    let message = '';
+    let resultMessage = '';
     
     if (isWin) {
         reward = game.getReward();
         addMoney(userId, reward);
-        message = `🎉 **BẠN THẮNG!** ${choice} với tổng ${result.total}`;
+        resultMessage = `🎉 **BẠN THẮNG!** ${choice} với tổng ${result.total}`;
     } else {
-        message = `😢 **BẠN THUA!** ${choice} với tổng ${result.total}`;
+        resultMessage = `😢 **BẠN THUA!** ${choice} với tổng ${result.total}`;
     }
     
     const diceEmojis = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
@@ -1509,7 +1509,7 @@ async function handleTaiXiuCommand(message, args) {
         `${diceEmojis[result.dice[0]-1]} ${diceEmojis[result.dice[1]-1]} ${diceEmojis[result.dice[2]-1]}\n**Tổng:** ${result.total}`,
         isWin ? COLORS.SUCCESS : COLORS.ERROR,
         [
-            { name: '📊 Kết quả', value: message, inline: false },
+            { name: '📊 Kết quả', value: resultMessage, inline: false },
             { name: '💰 Thưởng', value: isWin ? formatMoney(reward) : '0 xu', inline: true },
             { name: '💰 Số dư mới', value: formatMoney(getBalance(userId)), inline: true }
         ]
@@ -1562,15 +1562,15 @@ async function handleXosoCommand(message, args) {
         addMoney(userId, totalReward);
     }
     
-    let message = '';
+    let resultMessage = '';
     if (winTickets.length > 0) {
-        message = `🎉 **TRÚNG ${winTickets.length} VÉ!**\n`;
+        resultMessage = `🎉 **TRÚNG ${winTickets.length} VÉ!**\n`;
         for (const win of winTickets) {
-            message += `Vé số ${win.number}: ${formatMoney(win.reward)}\n`;
+            resultMessage += `Vé số ${win.number}: ${formatMoney(win.reward)}\n`;
         }
-        message += `\n💰 Tổng thưởng: ${formatMoney(totalReward)}`;
+        resultMessage += `\n💰 Tổng thưởng: ${formatMoney(totalReward)}`;
     } else {
-        message = `😢 Không trúng vé nào!`;
+        resultMessage = `😢 Không trúng vé nào!`;
     }
     
     const embed = createEmbed(
@@ -1578,7 +1578,7 @@ async function handleXosoCommand(message, args) {
         `**Vé của bạn:** ${tickets.join(' - ')}\n\n**Giải Đặc Biệt:** ${result.special}\n**Giải Nhất:** ${result.first}\n**Giải Nhì:** ${result.second.join(' - ')}\n**Giải Ba:** ${result.third.join(' - ')}`,
         totalReward > 0 ? COLORS.SUCCESS : COLORS.ERROR,
         [
-            { name: '📊 Kết quả', value: message, inline: false },
+            { name: '📊 Kết quả', value: resultMessage, inline: false },
             { name: '💰 Số dư mới', value: formatMoney(getBalance(userId)), inline: true }
         ]
     );
