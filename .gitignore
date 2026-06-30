@@ -1,0 +1,16 @@
+node_modules/
+.env
+.DS_Store
+*.log
+dist/
+build/
+.idea/
+.vscode/
+package-lock.json
+yarn.lock
+backup/
+temp/
+logs/
+*.pid
+*.seed
+*.pid.lock
