@@ -6,14 +6,11 @@ const userSchema = new mongoose.Schema({
     displayName: String,
     avatar: String,
 
-    // Level & Progression
     level: { type: Number, default: 1 },
     exp: { type: Number, default: 0 },
     expToNext: { type: Number, default: 100 },
     prestige: { type: Number, default: 0 },
-    ascension: { type: Number, default: 0 },
 
-    // Economy
     coins: { type: Number, default: 10000 },
     gems: { type: Number, default: 50 },
     bank: { type: Number, default: 0 },
@@ -21,7 +18,6 @@ const userSchema = new mongoose.Schema({
     totalEarned: { type: Number, default: 0 },
     totalSpent: { type: Number, default: 0 },
 
-    // Stats
     stats: {
         hp: { type: Number, default: 100 },
         maxHp: { type: Number, default: 100 },
@@ -39,7 +35,6 @@ const userSchema = new mongoose.Schema({
         luck: { type: Number, default: 10 }
     },
 
-    // Equipment
     equipment: {
         weapon: { type: mongoose.Schema.Types.Mixed, default: null },
         armor: { type: mongoose.Schema.Types.Mixed, default: null },
@@ -47,11 +42,9 @@ const userSchema = new mongoose.Schema({
         boots: { type: mongoose.Schema.Types.Mixed, default: null },
         gloves: { type: mongoose.Schema.Types.Mixed, default: null },
         ring: { type: mongoose.Schema.Types.Mixed, default: null },
-        necklace: { type: mongoose.Schema.Types.Mixed, default: null },
-        pet: { type: mongoose.Schema.Types.Mixed, default: null }
+        necklace: { type: mongoose.Schema.Types.Mixed, default: null }
     },
 
-    // Inventory
     inventory: [{
         id: { type: String, default: () => `item_${Date.now()}` },
         name: String,
@@ -63,7 +56,6 @@ const userSchema = new mongoose.Schema({
         equipped: { type: Boolean, default: false }
     }],
 
-    // Pets
     pets: [{
         id: { type: String, default: () => `pet_${Date.now()}` },
         name: String,
@@ -83,7 +75,6 @@ const userSchema = new mongoose.Schema({
         hunger: { type: Number, default: 100 }
     }],
 
-    // PvP
     pvp: {
         elo: { type: Number, default: 1000 },
         wins: { type: Number, default: 0 },
@@ -93,34 +84,18 @@ const userSchema = new mongoose.Schema({
         highestElo: { type: Number, default: 1000 }
     },
 
-    // Statistics
     statistics: {
         totalBattles: { type: Number, default: 0 },
         totalWins: { type: Number, default: 0 },
         totalLosses: { type: Number, default: 0 },
         totalBossKills: { type: Number, default: 0 },
         totalDungeons: { type: Number, default: 0 },
-        totalQuests: { type: Number, default: 0 },
-        totalGambling: { type: Number, default: 0 },
-        totalGamblingWins: { type: Number, default: 0 },
-        totalAdventures: { type: Number, default: 0 },
-        dailyStreak: { type: Number, default: 0 },
-        totalDailyClaims: { type: Number, default: 0 }
+        totalAdventures: { type: Number, default: 0 }
     },
 
-    // Battle Pass
-    battlePass: {
-        tier: { type: Number, default: 0 },
-        exp: { type: Number, default: 0 },
-        premium: { type: Boolean, default: false },
-        claimed: [String]
-    },
-
-    // Cooldowns
     cooldowns: {
         daily: Date,
         weekly: Date,
-        monthly: Date,
         work: Date,
         beg: Date,
         crime: Date,
@@ -133,35 +108,17 @@ const userSchema = new mongoose.Schema({
         boss: Date,
         dungeon: Date,
         gamble: Date,
-        lottery: Date,
         pet: Date
     },
 
-    // Timestamps
     createdAt: { type: Date, default: Date.now },
     lastActive: { type: Date, default: Date.now }
 }, { timestamps: true });
 
-// Indexes
 userSchema.index({ userId: 1 });
 userSchema.index({ level: -1 });
 userSchema.index({ coins: -1 });
-userSchema.index({ 'pvp.elo': -1 });
 
-// Virtuals
-userSchema.virtual('rank').get(function() {
-    const elo = this.pvp.elo;
-    if (elo >= 2400) return 'Grandmaster';
-    if (elo >= 2200) return 'Master';
-    if (elo >= 2000) return 'Diamond';
-    if (elo >= 1800) return 'Platinum';
-    if (elo >= 1600) return 'Gold';
-    if (elo >= 1400) return 'Silver';
-    if (elo >= 1200) return 'Bronze';
-    return 'Unranked';
-});
-
-// Methods
 userSchema.methods.addExp = function(amount) {
     this.exp += amount;
     let leveledUp = false;
@@ -172,14 +129,11 @@ userSchema.methods.addExp = function(amount) {
         this.expToNext = Math.floor(this.expToNext * 1.5);
         leveledUp = true;
         
-        // Level up bonuses
         this.stats.maxHp += 10;
         this.stats.maxMana += 5;
         this.stats.maxStamina += 2;
         this.stats.atk += 2;
         this.stats.def += 1;
-        this.stats.crit += 0.5;
-        this.stats.dodge += 0.5;
     }
     
     return leveledUp;
@@ -210,7 +164,6 @@ userSchema.methods.getCooldownTime = function(action) {
     const cooldowns = {
         daily: 86400000,
         weekly: 604800000,
-        monthly: 2592000000,
         work: 60000,
         beg: 30000,
         crime: 120000,
@@ -223,7 +176,6 @@ userSchema.methods.getCooldownTime = function(action) {
         boss: 300000,
         dungeon: 600000,
         gamble: 5000,
-        lottery: 600000,
         pet: 10000
     };
     return cooldowns[action] || 60000;
