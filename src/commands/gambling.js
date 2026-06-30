@@ -1,6 +1,5 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const User = require('../models/User');
-const { EmbedBuilderUtil } = require('../utils/embedBuilder');
 const { logger } = require('../utils/logger');
 
 module.exports = {
@@ -30,8 +29,7 @@ module.exports = {
             .addIntegerOption(opt => opt.setName('bet').setRequired(true).setMinValue(100))
             .addStringOption(opt => opt.setName('color').setRequired(true).addChoices(
                 { name: 'Red', value: 'red' },
-                { name: 'Black', value: 'black' },
-                { name: 'Green', value: 'green' }
+                { name: 'Black', value: 'black' }
             )))
         .addSubcommand(sub => sub
             .setName('blackjack')
@@ -61,7 +59,7 @@ module.exports = {
     async coinFlip(interaction) {
         await interaction.deferReply();
         const user = await User.findOne({ userId: interaction.user.id });
-        if (!user) return interaction.editReply('❌ Create an account first! Use `/daily`.');
+        if (!user) return interaction.editReply('❌ Create an account first! Use `/economy daily`.');
 
         const bet = interaction.options.getInteger('bet');
         const choice = interaction.options.getString('choice');
@@ -72,11 +70,12 @@ module.exports = {
 
         const result = Math.random() < 0.5 ? 'heads' : 'tails';
         const isWin = choice === result;
-        const winnings = isWin ? bet : -bet;
 
-        if (isWin) user.addCoins(bet);
-        else user.removeCoins(bet);
-        user.statistics.totalGambling++;
+        if (isWin) {
+            user.addCoins(bet);
+        } else {
+            user.removeCoins(bet);
+        }
         await user.save();
 
         const embed = new EmbedBuilder()
@@ -87,12 +86,11 @@ module.exports = {
                 { name: 'Choice', value: choice, inline: true },
                 { name: 'Bet', value: `${bet} coins`, inline: true },
                 { name: 'Winnings', value: `${isWin ? '+' : '-'}${bet} coins`, inline: true },
-                { name: 'New Balance', value: `${user.coins} coins`, inline: true }
+                { name: 'Balance', value: `${user.coins} coins`, inline: true }
             )
             .setTimestamp();
 
         await interaction.editReply({ embeds: [embed] });
-        logger.info(`CoinFlip: ${interaction.user.tag} bet ${bet} on ${choice} -> ${result} (${isWin ? 'Won' : 'Lost'})`);
     },
 
     async dice(interaction) {
@@ -109,11 +107,12 @@ module.exports = {
 
         const result = Math.floor(Math.random() * 6) + 1;
         const isWin = guess === result;
-        const multiplier = isWin ? 6 : 0;
-        const winnings = isWin ? bet * 6 : -bet;
 
-        if (isWin) user.addCoins(bet * 5);
-        else user.removeCoins(bet);
+        if (isWin) {
+            user.addCoins(bet * 5);
+        } else {
+            user.removeCoins(bet);
+        }
         await user.save();
 
         const embed = new EmbedBuilder()
@@ -123,8 +122,8 @@ module.exports = {
             .addFields(
                 { name: 'Your Guess', value: `${guess}`, inline: true },
                 { name: 'Result', value: `${result}`, inline: true },
-                { name: 'Winnings', value: `${isWin ? '+' : '-'}${bet * (isWin ? 5 : 1)} coins`, inline: true },
-                { name: 'New Balance', value: `${user.coins} coins`, inline: true }
+                { name: 'Winnings', value: `${isWin ? '+' : '-'}${isWin ? bet * 5 : bet} coins`, inline: true },
+                { name: 'Balance', value: `${user.coins} coins`, inline: true }
             )
             .setTimestamp();
 
@@ -151,15 +150,13 @@ module.exports = {
         const isWin = results[0] === results[1] && results[1] === results[2];
         const multiplier = isWin ? 
             results[0] === '💎' ? 10 :
-            results[0] === '7️⃣' ? 7 :
-            results[0] === '🍇' ? 5 :
-            results[0] === '🍊' ? 4 :
-            results[0] === '🍋' ? 3 : 2 : 0;
+            results[0] === '7️⃣' ? 7 : 3 : 0;
 
-        const winnings = isWin ? bet * multiplier : -bet;
-
-        if (isWin) user.addCoins(bet * multiplier);
-        else user.removeCoins(bet);
+        if (isWin) {
+            user.addCoins(bet * multiplier);
+        } else {
+            user.removeCoins(bet);
+        }
         await user.save();
 
         const embed = new EmbedBuilder()
@@ -168,8 +165,8 @@ module.exports = {
             .setDescription(`${results.join(' | ')}`)
             .addFields(
                 { name: 'Result', value: isWin ? `You won ${multiplier}x!` : 'Better luck next time!', inline: true },
-                { name: 'Winnings', value: `${isWin ? '+' : '-'}${winnings} coins`, inline: true },
-                { name: 'New Balance', value: `${user.coins} coins`, inline: true }
+                { name: 'Winnings', value: `${isWin ? '+' : '-'}${isWin ? bet * multiplier : bet} coins`, inline: true },
+                { name: 'Balance', value: `${user.coins} coins`, inline: true }
             )
             .setTimestamp();
 
@@ -188,14 +185,15 @@ module.exports = {
             return interaction.editReply(`❌ You need ${bet} coins! You have ${user.coins}.`);
         }
 
-        const colors = ['red', 'black', 'green'];
+        const colors = ['red', 'black'];
         const resultColor = colors[Math.floor(Math.random() * colors.length)];
         const isWin = color === resultColor;
-        const multiplier = resultColor === 'green' ? 14 : color === resultColor ? 2 : 0;
-        const winnings = isWin ? bet * multiplier : -bet;
 
-        if (isWin) user.addCoins(winnings);
-        else user.removeCoins(bet);
+        if (isWin) {
+            user.addCoins(bet);
+        } else {
+            user.removeCoins(bet);
+        }
         await user.save();
 
         const embed = new EmbedBuilder()
@@ -205,8 +203,8 @@ module.exports = {
             .addFields(
                 { name: 'Your Bet', value: `${color} (${bet} coins)`, inline: true },
                 { name: 'Result', value: resultColor, inline: true },
-                { name: 'Winnings', value: `${isWin ? '+' : '-'}${winnings} coins`, inline: true },
-                { name: 'New Balance', value: `${user.coins} coins`, inline: true }
+                { name: 'Winnings', value: `${isWin ? '+' : '-'}${bet} coins`, inline: true },
+                { name: 'Balance', value: `${user.coins} coins`, inline: true }
             )
             .setTimestamp();
 
@@ -223,7 +221,6 @@ module.exports = {
             return interaction.editReply(`❌ You need ${bet} coins! You have ${user.coins}.`);
         }
 
-        // Simple blackjack implementation
         const getCard = () => Math.floor(Math.random() * 10) + 1;
         const playerCards = [getCard(), getCard()];
         const dealerCards = [getCard(), getCard()];
@@ -231,7 +228,6 @@ module.exports = {
         let playerTotal = playerCards.reduce((a, b) => a + b, 0);
         let dealerTotal = dealerCards.reduce((a, b) => a + b, 0);
 
-        // Dealer hits on soft 17
         while (dealerTotal < 17) {
             dealerCards.push(getCard());
             dealerTotal = dealerCards.reduce((a, b) => a + b, 0);
@@ -272,7 +268,7 @@ module.exports = {
                 { name: 'Dealer Cards', value: dealerCards.join(' + '), inline: true },
                 { name: 'Dealer Total', value: `${dealerTotal}`, inline: true },
                 { name: 'Result', value: resultMessage, inline: false },
-                { name: 'New Balance', value: `${user.coins} coins`, inline: true }
+                { name: 'Balance', value: `${user.coins} coins`, inline: true }
             )
             .setTimestamp();
 
@@ -311,8 +307,8 @@ module.exports = {
                 { name: 'Your Numbers', value: userNumbers.join(', '), inline: false },
                 { name: 'Matches', value: `${matches}`, inline: true },
                 { name: 'Winnings', value: `+${winnings} coins`, inline: true },
-                { name: 'Ticket Cost', value: `-${cost} coins`, inline: true },
-                { name: 'New Balance', value: `${user.coins} coins`, inline: true }
+                { name: 'Cost', value: `-${cost} coins`, inline: true },
+                { name: 'Balance', value: `${user.coins} coins`, inline: true }
             )
             .setTimestamp();
 
