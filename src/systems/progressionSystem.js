@@ -1,2 +1,0 @@
-// progressionSystem.js
-module.exports = {};
