@@ -1,5 +1,5 @@
-# Dockerfile cho Discord Cowoncy Bot - Đã sửa lỗi canvas
-# Sử dụng Node.js 18 Alpine nhưng cài đặt thêm dependencies cho canvas
+# Dockerfile cho Discord Cowoncy Bot
+# Sử dụng Node.js 18 Alpine để tối ưu kích thước
 
 # -------------------- STAGE 1: Builder --------------------
 FROM node:18-alpine AS builder
@@ -15,7 +15,8 @@ RUN apk add --no-cache \
     pango-dev \
     jpeg-dev \
     giflib-dev \
-    librsvg-dev
+    librsvg-dev \
+    libpng-dev
 
 # Tạo thư mục làm việc
 WORKDIR /usr/src/app
@@ -29,18 +30,28 @@ RUN npm install
 # Copy toàn bộ source code
 COPY . .
 
+# Build ứng dụng (nếu cần)
+# RUN npm run build
+
 # -------------------- STAGE 2: Production --------------------
 FROM node:18-alpine
 
-# Cài đặt các thư viện runtime cho canvas
+# Cài đặt các gói cần thiết cho production
+RUN apk add --no-cache tzdata
+
+# Thiết lập múi giờ
+ENV TZ=Asia/Ho_Chi_Minh
+
+# Cài đặt thư viện runtime cho canvas
 RUN apk add --no-cache \
     cairo \
     pango \
     jpeg \
     giflib \
-    librsvg
+    librsvg \
+    libpng
 
-# Tạo user và group không root
+# Tạo user và group không root để chạy ứng dụng an toàn hơn
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001
 
@@ -53,11 +64,13 @@ RUN npm ci --only=production && npm cache clean --force
 
 # Copy source code từ builder
 COPY --from=builder /usr/src/app/src ./src
+COPY --from=builder /usr/src/app/config ./config
+COPY --from=builder /usr/src/app/assets ./assets 2>/dev/null || true
 
 # Tạo các thư mục cần thiết
 RUN mkdir -p logs backup
 
-# Set quyền sở hữu
+# Set quyền sở hữu cho thư mục
 RUN chown -R nodejs:nodejs /usr/src/app
 
 # Switch sang user nodejs
