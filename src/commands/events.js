@@ -1,2 +1,0 @@
-// events.js
-module.exports = {};
