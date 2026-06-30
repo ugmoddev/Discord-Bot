@@ -1,2 +1,0 @@
-// Transaction.js
-module.exports = {};
