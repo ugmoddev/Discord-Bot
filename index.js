@@ -11,8 +11,10 @@ const {
     ButtonStyle,
     Events 
 } = require('discord.js');
-const dotenv = require('dotenv');
-dotenv.config();
+
+// KHÔNG CẦN dotenv NỮA
+// const dotenv = require('dotenv');
+// dotenv.config();
 
 // ==========================================
 // 1. CẤU HÌNH BOT
@@ -531,7 +533,6 @@ client.on(Events.MessageCreate, async (message) => {
                 await handleDiceCommand(message);
                 break;
             default:
-                // Không làm gì nếu không có lệnh
                 break;
         }
     } catch (error) {
@@ -544,9 +545,11 @@ client.on(Events.MessageCreate, async (message) => {
 // 10. KHỞI ĐỘNG BOT
 // ==========================================
 
+// LẤY TOKEN TỪ BIẾN MÔI TRƯỜNG (Render sẽ tự động inject)
 const token = process.env.DISCORD_TOKEN;
 if (!token) {
-    console.error('❌ Không tìm thấy DISCORD_TOKEN trong file .env');
+    console.error('❌ Không tìm thấy DISCORD_TOKEN trong biến môi trường!');
+    console.error('📌 Vui lòng thêm DISCORD_TOKEN vào Environment Variables trên Render');
     process.exit(1);
 }
 
