@@ -1,6 +1,6 @@
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const User = require('../models/User');
-const { generateMonster } = require('../systems/battleSystem');
+const { generateMonster, BattleSystem } = require('../systems/battleSystem');
 const { logger } = require('../utils/logger');
 
 module.exports = {
@@ -20,10 +20,7 @@ module.exports = {
             .setDescription('Fight a boss monster'))
         .addSubcommand(sub => sub
             .setName('dungeon')
-            .setDescription('Enter a dungeon'))
-        .addSubcommand(sub => sub
-            .setName('arena')
-            .setDescription('Enter the arena')),
+            .setDescription('Enter a dungeon')),
 
     cooldown: 10,
 
@@ -35,7 +32,6 @@ module.exports = {
             case 'pvp': return this.pvp(interaction, client);
             case 'boss': return this.boss(interaction, client);
             case 'dungeon': return this.dungeon(interaction, client);
-            case 'arena': return this.arena(interaction, client);
             default: return interaction.reply('❌ Unknown battle mode!');
         }
     },
@@ -53,18 +49,31 @@ module.exports = {
         const monster = generateMonster(level);
         
         user.stats.stamina -= 20;
-        const battle = {
-            user: user,
-            monster: monster,
-            round: 0,
-            finished: false,
-            log: []
-        };
+        const battleSystem = new BattleSystem();
+        const battle = battleSystem.startPvEBattle(user, monster);
 
         const battleId = `battle_${interaction.user.id}`;
         client.battles.set(battleId, battle);
 
-        const embed = this.createBattleEmbed(interaction.user, monster, battle);
+        const embed = new EmbedBuilder()
+            .setColor('#FF4444')
+            .setTitle('⚔️ Battle!')
+            .setDescription(`Round 1`)
+            .addFields(
+                {
+                    name: `👤 ${interaction.user.username}`,
+                    value: `HP: ${user.stats.hp}/${user.stats.maxHp}\nATK: ${user.stats.atk}`,
+                    inline: true
+                },
+                {
+                    name: `👾 ${monster.name}`,
+                    value: `HP: ${monster.stats.hp}/${monster.stats.maxHp}\nATK: ${monster.stats.atk}`,
+                    inline: true
+                }
+            )
+            .setFooter({ text: `Level ${monster.level} | Click a button to act!` })
+            .setTimestamp();
+
         const row = new ActionRowBuilder()
             .addComponents(
                 new ButtonBuilder().setCustomId(`battle_attack`).setLabel('⚔️ Attack').setStyle(ButtonStyle.Danger),
@@ -75,27 +84,6 @@ module.exports = {
 
         await interaction.editReply({ embeds: [embed], components: [row] });
         logger.info(`Battle started: ${interaction.user.tag} vs ${monster.name}`);
-    },
-
-    createBattleEmbed(user, monster, battle) {
-        return new EmbedBuilder()
-            .setColor('#FF4444')
-            .setTitle('⚔️ Battle!')
-            .setDescription(`Round ${battle.round + 1}`)
-            .addFields(
-                {
-                    name: `👤 ${user.username}`,
-                    value: `HP: ${user.stats.hp}/${user.stats.maxHp}\nATK: ${user.stats.atk}\nDEF: ${user.stats.def}`,
-                    inline: true
-                },
-                {
-                    name: `👾 ${monster.name}`,
-                    value: `HP: ${monster.stats.hp}/${monster.stats.maxHp}\nATK: ${monster.stats.atk}\nDEF: ${monster.stats.def}`,
-                    inline: true
-                }
-            )
-            .setFooter({ text: `Level ${monster.level} | Click a button to act!` })
-            .setTimestamp();
     },
 
     async pvp(interaction, client) {
@@ -113,7 +101,6 @@ module.exports = {
             return interaction.editReply('❌ You cannot fight yourself!');
         }
 
-        // Simple PvP logic
         const userAtk = user.stats.atk + Math.floor(Math.random() * 10);
         const opponentAtk = opponent.stats.atk + Math.floor(Math.random() * 10);
 
@@ -164,11 +151,9 @@ module.exports = {
             return interaction.editReply('❌ Need 30 stamina for boss fight!');
         }
 
-        // Generate boss
         const boss = generateMonster(Math.max(1, user.level + 5), true);
         user.stats.stamina -= 30;
 
-        // Simple boss battle
         const userDamage = Math.max(1, user.stats.atk - boss.stats.def / 2);
         const bossDamage = Math.max(1, boss.stats.atk - user.stats.def / 2);
 
@@ -184,7 +169,7 @@ module.exports = {
             const coinReward = Math.floor(boss.stats.coins * 3);
             user.addExp(expReward);
             user.addCoins(coinReward);
-            user.statistics.totalBossKills++;
+            user.statistics.totalBossKills = (user.statistics.totalBossKills || 0) + 1;
             rewards = { exp: expReward, coins: coinReward };
         } else {
             result = `💔 ${boss.name} defeated you!`;
@@ -225,7 +210,6 @@ module.exports = {
 
         user.stats.stamina -= 50;
         
-        // Generate dungeon waves
         const waves = [];
         const waveCount = Math.floor(Math.random() * 3) + 3;
         
@@ -256,7 +240,7 @@ module.exports = {
         if (cleared) {
             user.addExp(totalExp);
             user.addCoins(totalCoins);
-            user.statistics.totalDungeons++;
+            user.statistics.totalDungeons = (user.statistics.totalDungeons || 0) + 1;
             await user.save();
 
             const embed = new EmbedBuilder()
@@ -284,91 +268,5 @@ module.exports = {
 
             await interaction.editReply({ embeds: [embed] });
         }
-    },
-
-    async arena(interaction, client) {
-        await interaction.deferReply();
-        const user = await User.findOne({ userId: interaction.user.id });
-        if (!user) return interaction.editReply('❌ Create an account first!');
-
-        if (user.stats.stamina < 25) {
-            return interaction.editReply('❌ Need 25 stamina for arena!');
-        }
-
-        user.stats.stamina -= 25;
-        
-        // Arena matchmaking - find random opponent from users
-        const opponents = await User.find({
-            userId: { $ne: interaction.user.id },
-            'pvp.elo': { $exists: true }
-        }).limit(10);
-
-        if (opponents.length === 0) {
-            return interaction.editReply('❌ No opponents found in arena!');
-        }
-
-        const opponent = opponents[Math.floor(Math.random() * opponents.length)];
-        const opponentUser = await client.users.fetch(opponent.userId);
-
-        // Calculate battle
-        const userAtk = user.stats.atk + user.stats.crit * 0.5;
-        const opponentAtk = opponent.stats.atk + opponent.stats.crit * 0.5;
-        
-        const userDef = user.stats.def;
-        const opponentDef = opponent.stats.def;
-
-        let userDamage = Math.max(1, userAtk - opponentDef / 2);
-        let opponentDamage = Math.max(1, opponentAtk - userDef / 2);
-
-        // Add randomness
-        userDamage *= (0.8 + Math.random() * 0.4);
-        opponentDamage *= (0.8 + Math.random() * 0.4);
-
-        userDamage = Math.floor(userDamage);
-        opponentDamage = Math.floor(opponentDamage);
-
-        const userHits = Math.ceil(user.stats.hp / opponentDamage);
-        const opponentHits = Math.ceil(opponent.stats.hp / userDamage);
-
-        let result = '';
-        let eloChange = 0;
-
-        if (userHits <= opponentHits) {
-            result = `🎉 ${interaction.user.username} wins the arena battle!`;
-            user.pvp.wins++;
-            opponent.pvp.losses++;
-            eloChange = 25;
-            user.pvp.elo += eloChange;
-            opponent.pvp.elo = Math.max(0, opponent.pvp.elo - eloChange);
-            user.addCoins(1000);
-        } else if (opponentHits < userHits) {
-            result = `💔 ${opponentUser.username} wins the arena battle!`;
-            user.pvp.losses++;
-            opponent.pvp.wins++;
-            eloChange = 25;
-            opponent.pvp.elo += eloChange;
-            user.pvp.elo = Math.max(0, user.pvp.elo - eloChange);
-            opponent.addCoins(1000);
-        } else {
-            result = '⚔️ It\'s a draw!';
-            user.pvp.draws++;
-            opponent.pvp.draws++;
-        }
-
-        await user.save();
-        await opponent.save();
-
-        const embed = new EmbedBuilder()
-            .setColor('#FFD700')
-            .setTitle('🏟️ Arena Battle')
-            .setDescription(result)
-            .addFields(
-                { name: interaction.user.username, value: `HP: ${user.stats.hp}\nATK: ${userDamage}`, inline: true },
-                { name: opponentUser.username, value: `HP: ${opponent.stats.hp}\nATK: ${opponentDamage}`, inline: true },
-                { name: 'ELO Change', value: `${eloChange > 0 ? '+' : ''}${eloChange}`, inline: true }
-            )
-            .setTimestamp();
-
-        await interaction.editReply({ embeds: [embed] });
     }
 };
