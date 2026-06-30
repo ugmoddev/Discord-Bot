@@ -1,5 +1,5 @@
 // ==========================================
-// DISCORD GAME BOT - PHIÊN BẢN CÓ ADMIN
+// DISCORD GAME BOT - PHIÊN BẢN ĐẦY ĐỦ
 // ==========================================
 
 const { 
@@ -10,8 +10,7 @@ const {
     ButtonBuilder, 
     ButtonStyle,
     Events,
-    Partials,
-    PermissionsBitField
+    Partials
 } = require('discord.js');
 
 // ==========================================
@@ -45,7 +44,9 @@ const COLORS = {
     RARE: 0xFFD700,
     HORROR: 0x8B0000,
     MONEY: 0x2ECC71,
-    ADMIN: 0xE74C3C
+    ADMIN: 0xE74C3C,
+    PET: 0xF39C12,
+    LOTTERY: 0xE67E22
 };
 
 // ==========================================
@@ -54,26 +55,11 @@ const COLORS = {
 
 const ADMIN_IDS = [
     '1316027180433801296', // Admin chính
-    // Thêm các ID admin khác vào đây nếu cần
+    // Thêm ID admin khác vào đây nếu cần
 ];
-
-const ADMIN_PERMISSIONS = {
-    GIVE_MONEY: 'give_money',
-    REMOVE_MONEY: 'remove_money',
-    SET_MONEY: 'set_money',
-    RESET_GAME: 'reset_game',
-    CLEAR_DATA: 'clear_data',
-    BROADCAST: 'broadcast',
-    SHUTDOWN: 'shutdown'
-};
 
 function isAdmin(userId) {
     return ADMIN_IDS.includes(userId);
-}
-
-function hasPermission(userId, permission) {
-    if (!isAdmin(userId)) return false;
-    return true; // Admin có toàn quyền
 }
 
 // ==========================================
@@ -100,10 +86,6 @@ const REWARDS = {
     memory: { win: 250, lose: 25 },
     daily: 500
 };
-
-// ==========================================
-// 4. HÀM QUẢN LÝ TIỀN TỆ
-// ==========================================
 
 function getBalance(userId) {
     return userBalances.get(userId) || 0;
@@ -143,8 +125,383 @@ function getDailyCooldown(userId) {
     return Math.max(0, 24 - hoursSince);
 }
 
+function formatMoney(amount) {
+    return `${CURRENCY.icon} ${amount.toLocaleString()} ${CURRENCY.name}`;
+}
+
 // ==========================================
-// 5. LƯU TRỮ DỮ LIỆU GAME
+// 4. HỆ THỐNG PET
+// ==========================================
+
+const PETS = {
+    dragon: {
+        name: '🐉 Rồng',
+        price: 10000,
+        emoji: '🐉',
+        maxHealth: 100,
+        attack: 20,
+        defense: 15
+    },
+    phoenix: {
+        name: '🦅 Phượng Hoàng',
+        price: 8000,
+        emoji: '🦅',
+        maxHealth: 80,
+        attack: 25,
+        defense: 10
+    },
+    wolf: {
+        name: '🐺 Sói',
+        price: 5000,
+        emoji: '🐺',
+        maxHealth: 70,
+        attack: 18,
+        defense: 12
+    },
+    cat: {
+        name: '🐱 Mèo',
+        price: 2000,
+        emoji: '🐱',
+        maxHealth: 50,
+        attack: 10,
+        defense: 8
+    },
+    dog: {
+        name: '🐶 Chó',
+        price: 2500,
+        emoji: '🐶',
+        maxHealth: 60,
+        attack: 12,
+        defense: 10
+    },
+    fox: {
+        name: '🦊 Cáo',
+        price: 3000,
+        emoji: '🦊',
+        maxHealth: 55,
+        attack: 15,
+        defense: 9
+    },
+    panda: {
+        name: '🐼 Gấu Trúc',
+        price: 4000,
+        emoji: '🐼',
+        maxHealth: 75,
+        attack: 14,
+        defense: 18
+    }
+};
+
+const PET_SHOP = [
+    { id: 'dragon', ...PETS.dragon },
+    { id: 'phoenix', ...PETS.phoenix },
+    { id: 'wolf', ...PETS.wolf },
+    { id: 'cat', ...PETS.cat },
+    { id: 'dog', ...PETS.dog },
+    { id: 'fox', ...PETS.fox },
+    { id: 'panda', ...PETS.panda }
+];
+
+const userPets = new Map();
+
+class Pet {
+    constructor(type, nickname = '') {
+        const petData = PETS[type];
+        this.type = type;
+        this.nickname = nickname || petData.name;
+        this.emoji = petData.emoji;
+        this.health = petData.maxHealth;
+        this.maxHealth = petData.maxHealth;
+        this.attack = petData.attack;
+        this.defense = petData.defense;
+        this.level = 1;
+        this.exp = 0;
+        this.hunger = 100;
+        this.happiness = 100;
+        this.energy = 100;
+        this.isAlive = true;
+        this.lastFed = Date.now();
+        this.lastPlayed = Date.now();
+        this.lastRest = Date.now();
+    }
+
+    getExpToLevel() {
+        return this.level * 50;
+    }
+
+    addExp(amount) {
+        this.exp += amount;
+        while (this.exp >= this.getExpToLevel()) {
+            this.exp -= this.getExpToLevel();
+            this.level++;
+            this.maxHealth += 10;
+            this.attack += 3;
+            this.defense += 2;
+            this.health = this.maxHealth;
+        }
+    }
+
+    feed() {
+        if (!this.isAlive) return { result: 'dead', message: '❌ Pet của bạn đã chết!' };
+        if (this.hunger >= 100) return { result: 'full', message: '🍽️ Pet đã no rồi!' };
+        
+        this.hunger = Math.min(100, this.hunger + 30);
+        this.happiness = Math.min(100, this.happiness + 5);
+        this.lastFed = Date.now();
+        
+        return { result: 'success', message: `🍽️ ${this.nickname} đã được cho ăn no nê!` };
+    }
+
+    play() {
+        if (!this.isAlive) return { result: 'dead', message: '❌ Pet của bạn đã chết!' };
+        if (this.energy < 20) return { result: 'tired', message: '😴 Pet quá mệt để chơi!' };
+        if (this.hunger < 20) return { result: 'hungry', message: '🍽️ Pet đói quá, hãy cho ăn trước!' };
+        
+        this.happiness = Math.min(100, this.happiness + 20);
+        this.energy = Math.max(0, this.energy - 20);
+        this.lastPlayed = Date.now();
+        this.addExp(15);
+        
+        return { result: 'success', message: `🎮 ${this.nickname} đã chơi vui vẻ!` };
+    }
+
+    rest() {
+        if (!this.isAlive) return { result: 'dead', message: '❌ Pet của bạn đã chết!' };
+        if (this.energy >= 100) return { result: 'full', message: '⚡ Pet đã đầy năng lượng!' };
+        
+        this.energy = Math.min(100, this.energy + 40);
+        this.lastRest = Date.now();
+        this.addExp(5);
+        
+        return { result: 'success', message: `😴 ${this.nickname} đã nghỉ ngơi!` };
+    }
+
+    checkStatus() {
+        const now = Date.now();
+        const hoursSinceFed = (now - this.lastFed) / (1000 * 60 * 60);
+        const hoursSincePlayed = (now - this.lastPlayed) / (1000 * 60 * 60);
+        
+        if (hoursSinceFed > 24) {
+            this.hunger = Math.max(0, this.hunger - 10);
+            this.happiness = Math.max(0, this.happiness - 5);
+        }
+        
+        if (hoursSincePlayed > 12) {
+            this.happiness = Math.max(0, this.happiness - 8);
+        }
+        
+        if (this.hunger <= 0 || this.happiness <= 0) {
+            this.health = Math.max(0, this.health - 5);
+            if (this.health <= 0) {
+                this.isAlive = false;
+                return { result: 'dead', message: '💀 Pet đã chết vì bị bỏ đói!' };
+            }
+        }
+        
+        return { result: 'ok' };
+    }
+
+    getStats() {
+        return {
+            name: this.nickname,
+            emoji: this.emoji,
+            type: this.type,
+            level: this.level,
+            exp: this.exp,
+            expToNext: this.getExpToLevel(),
+            health: this.health,
+            maxHealth: this.maxHealth,
+            attack: this.attack,
+            defense: this.defense,
+            hunger: this.hunger,
+            happiness: this.happiness,
+            energy: this.energy,
+            isAlive: this.isAlive
+        };
+    }
+}
+
+// ==========================================
+// 5. HỆ THỐNG CƯỢC VỚI NGƯỜI KHÁC
+// ==========================================
+
+const betGames = new Map();
+
+class BetGame {
+    constructor(player1, player2, amount) {
+        this.player1 = player1;
+        this.player2 = player2;
+        this.amount = amount;
+        this.status = 'waiting';
+        this.choices = {};
+        this.result = null;
+        this.startTime = Date.now();
+    }
+
+    makeChoice(playerId, choice) {
+        if (this.status === 'finished') return { result: 'finished', message: '❌ Game đã kết thúc!' };
+        if (playerId !== this.player1 && playerId !== this.player2) {
+            return { result: 'error', message: '❌ Bạn không tham gia game này!' };
+        }
+        if (this.choices[playerId]) {
+            return { result: 'error', message: '⚠️ Bạn đã chọn rồi!' };
+        }
+        
+        this.choices[playerId] = choice;
+        
+        if (Object.keys(this.choices).length === 2) {
+            this.status = 'finished';
+            return this.determineWinner();
+        }
+        
+        this.status = 'playing';
+        return { result: 'waiting', message: '⏳ Đợi đối thủ chọn...' };
+    }
+
+    determineWinner() {
+        const p1Choice = this.choices[this.player1];
+        const p2Choice = this.choices[this.player2];
+        
+        if (p1Choice === p2Choice) {
+            this.result = 'tie';
+            return { result: 'tie', message: '🤝 Hòa! Không ai mất xu!' };
+        }
+        
+        if (
+            (p1Choice === 'kéo' && p2Choice === 'bao') ||
+            (p1Choice === 'búa' && p2Choice === 'kéo') ||
+            (p1Choice === 'bao' && p2Choice === 'búa')
+        ) {
+            this.result = 'player1';
+            return { result: 'player1', message: `🎉 Người chơi 1 thắng! Nhận ${formatMoney(this.amount * 2)}` };
+        } else {
+            this.result = 'player2';
+            return { result: 'player2', message: `🎉 Người chơi 2 thắng! Nhận ${formatMoney(this.amount * 2)}` };
+        }
+    }
+
+    getStatus() {
+        const statusMap = {
+            'waiting': '⏳ Đợi đối thủ tham gia...',
+            'playing': '⚔️ Đang chơi...',
+            'finished': '🏁 Đã kết thúc!'
+        };
+        return statusMap[this.status] || this.status;
+    }
+}
+
+// ==========================================
+// 6. HỆ THỐNG LÔ ĐỀ - TÀI XỈU - XỔ SỐ
+// ==========================================
+
+const lotteryHistory = [];
+const lotteryNumbers = [];
+
+function generateLotteryNumber() {
+    return Math.floor(Math.random() * 100).toString().padStart(2, '0');
+}
+
+function generateSpecialPrize() {
+    return generateLotteryNumber();
+}
+
+function generateFirstPrize() {
+    return generateLotteryNumber();
+}
+
+function generateSecondPrize() {
+    return [generateLotteryNumber(), generateLotteryNumber()];
+}
+
+function generateThirdPrize() {
+    return [generateLotteryNumber(), generateLotteryNumber(), generateLotteryNumber()];
+}
+
+function generateLotteryResult() {
+    const result = {
+        special: generateSpecialPrize(),
+        first: generateFirstPrize(),
+        second: generateSecondPrize(),
+        third: generateThirdPrize(),
+        time: Date.now()
+    };
+    
+    lotteryHistory.push(result);
+    if (lotteryHistory.length > 100) {
+        lotteryHistory.shift();
+    }
+    
+    return result;
+}
+
+function checkLotteryWin(betNumber, result) {
+    const allNumbers = [
+        result.special,
+        result.first,
+        ...result.second,
+        ...result.third
+    ];
+    
+    return allNumbers.includes(betNumber);
+}
+
+function calculateLotteryReward(betNumber, result, betAmount) {
+    const isSpecial = betNumber === result.special;
+    const isFirst = betNumber === result.first;
+    const isSecond = result.second.includes(betNumber);
+    const isThird = result.third.includes(betNumber);
+    
+    if (isSpecial) {
+        return betAmount * 70;
+    } else if (isFirst) {
+        return betAmount * 50;
+    } else if (isSecond) {
+        return betAmount * 30;
+    } else if (isThird) {
+        return betAmount * 20;
+    }
+    return 0;
+}
+
+class TaiXiuGame {
+    constructor(betAmount, choice) {
+        this.betAmount = betAmount;
+        this.choice = choice;
+        this.result = null;
+        this.dice1 = 0;
+        this.dice2 = 0;
+        this.dice3 = 0;
+        this.total = 0;
+        this.gameOver = false;
+    }
+
+    roll() {
+        this.dice1 = Math.floor(Math.random() * 6) + 1;
+        this.dice2 = Math.floor(Math.random() * 6) + 1;
+        this.dice3 = Math.floor(Math.random() * 6) + 1;
+        this.total = this.dice1 + this.dice2 + this.dice3;
+        this.result = this.total >= 11 ? 'tai' : 'xiu';
+        this.gameOver = true;
+        return {
+            dice: [this.dice1, this.dice2, this.dice3],
+            total: this.total,
+            result: this.result
+        };
+    }
+
+    checkWin() {
+        if (!this.gameOver) return null;
+        return this.choice === this.result;
+    }
+
+    getReward() {
+        if (!this.checkWin()) return 0;
+        return this.betAmount * 2;
+    }
+}
+
+// ==========================================
+// 7. LƯU TRỮ DỮ LIỆU GAME
 // ==========================================
 
 const gameStates = new Map();
@@ -155,7 +512,7 @@ const blackjackGames = new Map();
 const memoryGames = new Map();
 
 // ==========================================
-// 6. CLASS GAME ĐOÁN SỐ
+// 8. CLASS GAME ĐOÁN SỐ
 // ==========================================
 
 class GuessGame {
@@ -198,7 +555,7 @@ class GuessGame {
 }
 
 // ==========================================
-// 7. CLASS TICTACTOE
+// 9. CLASS TICTACTOE
 // ==========================================
 
 class TicTacToe {
@@ -254,7 +611,7 @@ class TicTacToe {
 }
 
 // ==========================================
-// 8. CLASS HANGMAN
+// 10. CLASS HANGMAN
 // ==========================================
 
 class HangmanGame {
@@ -364,7 +721,7 @@ class HangmanGame {
 }
 
 // ==========================================
-// 9. CLASS TRIVIA
+// 11. CLASS TRIVIA
 // ==========================================
 
 class TriviaGame {
@@ -441,7 +798,7 @@ class TriviaGame {
 }
 
 // ==========================================
-// 10. CLASS BLACKJACK
+// 12. CLASS BLACKJACK
 // ==========================================
 
 class BlackjackGame {
@@ -546,7 +903,7 @@ class BlackjackGame {
 }
 
 // ==========================================
-// 11. CLASS MEMORY
+// 13. CLASS MEMORY
 // ==========================================
 
 class MemoryGame {
@@ -606,7 +963,7 @@ class MemoryGame {
 }
 
 // ==========================================
-// 12. CLASS SLOT MACHINE
+// 14. CLASS SLOT MACHINE
 // ==========================================
 
 class SlotGame {
@@ -639,7 +996,7 @@ class SlotGame {
 }
 
 // ==========================================
-// 13. HÀM TIỆN ÍCH
+// 15. HÀM TIỆN ÍCH
 // ==========================================
 
 function createEmbed(title, description, color = COLORS.INFO, fields = []) {
@@ -704,12 +1061,552 @@ function createMemoryBoard(game) {
     return rows;
 }
 
-function formatMoney(amount) {
-    return `${CURRENCY.icon} ${amount.toLocaleString()} ${CURRENCY.name}`;
+// ==========================================
+// 16. LỆNH PET
+// ==========================================
+
+async function handlePetShop(message) {
+    const userId = message.author.id;
+    const balance = getBalance(userId);
+    const ownedPet = userPets.get(userId);
+    
+    let description = `🏪 **CỬA HÀNG PET**\n💰 Số dư: ${formatMoney(balance)}\n\n`;
+    description += '📋 Danh sách pet có sẵn:\n';
+    
+    for (const pet of PET_SHOP) {
+        const isOwned = ownedPet && ownedPet.type === pet.id;
+        description += `\n${pet.emoji} **${pet.name}**\n`;
+        description += `   💰 Giá: ${formatMoney(pet.price)}\n`;
+        description += `   ⚔️ Tấn công: ${pet.attack} | 🛡️ Phòng thủ: ${pet.defense}\n`;
+        description += `   ❤️ Máu: ${pet.maxHealth}\n`;
+        description += `   ${isOwned ? '✅ **ĐÃ SỞ HỮU**' : 'Gõ `!pet buy ' + pet.id + '` để mua'}\n`;
+    }
+    
+    const embed = createEmbed('🏪 Cửa Hàng Pet', description, COLORS.PET);
+    await message.reply({ embeds: [embed] });
+}
+
+async function handlePetBuy(message, args) {
+    const userId = message.author.id;
+    
+    if (args.length === 0) {
+        await message.reply('⚠️ Vui lòng chọn pet cần mua! Gõ `!petshop` để xem danh sách.');
+        return;
+    }
+    
+    const petType = args[0].toLowerCase();
+    if (!PETS[petType]) {
+        await message.reply(`❌ Không tìm thấy pet '${petType}'! Gõ \`!petshop\` để xem danh sách.`);
+        return;
+    }
+    
+    if (userPets.has(userId)) {
+        await message.reply('❌ Bạn đã có pet rồi! Mỗi người chỉ được nuôi 1 pet.');
+        return;
+    }
+    
+    const petData = PETS[petType];
+    if (!removeMoney(userId, petData.price)) {
+        await message.reply(`❌ Bạn không có đủ tiền! Cần ${formatMoney(petData.price)}`);
+        return;
+    }
+    
+    const pet = new Pet(petType);
+    userPets.set(userId, pet);
+    
+    const embed = createEmbed(
+        '🎉 Mua Pet Thành Công!',
+        `${petData.emoji} Chúc mừng bạn đã sở hữu **${petData.name}**!\n💰 Đã trừ ${formatMoney(petData.price)}`,
+        COLORS.SUCCESS
+    );
+    await message.reply({ embeds: [embed] });
+}
+
+async function handlePetInfo(message) {
+    const userId = message.author.id;
+    const pet = userPets.get(userId);
+    
+    if (!pet) {
+        await message.reply('❌ Bạn chưa có pet! Gõ `!petshop` để mua.');
+        return;
+    }
+    
+    const status = pet.checkStatus();
+    if (status.result === 'dead') {
+        userPets.delete(userId);
+        await message.reply('💀 Pet của bạn đã chết! Hãy mua pet mới với `!petshop`.');
+        return;
+    }
+    
+    const stats = pet.getStats();
+    
+    const embed = createEmbed(
+        `${stats.emoji} Thông Tin Pet`,
+        `**Tên:** ${stats.name}\n**Loại:** ${stats.type}\n**Level:** ${stats.level}\n**EXP:** ${stats.exp}/${stats.expToNext}`,
+        COLORS.PET,
+        [
+            { name: '❤️ Sức khỏe', value: `${stats.health}/${stats.maxHealth}`, inline: true },
+            { name: '⚔️ Tấn công', value: `${stats.attack}`, inline: true },
+            { name: '🛡️ Phòng thủ', value: `${stats.defense}`, inline: true },
+            { name: '🍽️ Đói', value: `${stats.hunger}/100`, inline: true },
+            { name: '😊 Hạnh phúc', value: `${stats.happiness}/100`, inline: true },
+            { name: '⚡ Năng lượng', value: `${stats.energy}/100`, inline: true },
+            { name: '📋 Trạng thái', value: stats.isAlive ? '✅ Sống' : '💀 Chết', inline: true }
+        ]
+    );
+    
+    embed.addFields({
+        name: '📝 Hướng dẫn',
+        value: '`!pet feed` - Cho ăn\n`!pet play` - Chơi cùng\n`!pet rest` - Nghỉ ngơi'
+    });
+    
+    await message.reply({ embeds: [embed] });
+}
+
+async function handlePetFeed(message) {
+    const userId = message.author.id;
+    const pet = userPets.get(userId);
+    
+    if (!pet) {
+        await message.reply('❌ Bạn chưa có pet! Gõ `!petshop` để mua.');
+        return;
+    }
+    
+    const result = pet.feed();
+    const embed = createEmbed('🍽️ Cho Pet Ăn', result.message, result.result === 'success' ? COLORS.SUCCESS : COLORS.WARNING);
+    await message.reply({ embeds: [embed] });
+}
+
+async function handlePetPlay(message) {
+    const userId = message.author.id;
+    const pet = userPets.get(userId);
+    
+    if (!pet) {
+        await message.reply('❌ Bạn chưa có pet! Gõ `!petshop` để mua.');
+        return;
+    }
+    
+    const result = pet.play();
+    if (result.result === 'success') {
+        addMoney(userId, 10);
+        result.message += `\n💰 Nhận được 10 xu!`;
+    }
+    const embed = createEmbed('🎮 Chơi Với Pet', result.message, result.result === 'success' ? COLORS.SUCCESS : COLORS.WARNING);
+    await message.reply({ embeds: [embed] });
+}
+
+async function handlePetRest(message) {
+    const userId = message.author.id;
+    const pet = userPets.get(userId);
+    
+    if (!pet) {
+        await message.reply('❌ Bạn chưa có pet! Gõ `!petshop` để mua.');
+        return;
+    }
+    
+    const result = pet.rest();
+    const embed = createEmbed('😴 Cho Pet Nghỉ', result.message, result.result === 'success' ? COLORS.SUCCESS : COLORS.WARNING);
+    await message.reply({ embeds: [embed] });
+}
+
+async function handlePetRename(message, args) {
+    const userId = message.author.id;
+    const pet = userPets.get(userId);
+    
+    if (!pet) {
+        await message.reply('❌ Bạn chưa có pet! Gõ `!petshop` để mua.');
+        return;
+    }
+    
+    if (args.length === 0) {
+        await message.reply('⚠️ Vui lòng nhập tên mới cho pet! Ví dụ: `!pet rename Tèo`');
+        return;
+    }
+    
+    const newName = args.join(' ');
+    const oldName = pet.nickname;
+    pet.nickname = newName;
+    
+    const embed = createEmbed(
+        '📝 Đổi Tên Pet',
+        `✅ Đã đổi tên từ **${oldName}** thành **${newName}**!`,
+        COLORS.SUCCESS
+    );
+    await message.reply({ embeds: [embed] });
 }
 
 // ==========================================
-// 14. LỆNH ADMIN
+// 17. LỆNH CƯỢC VỚI NGƯỜI KHÁC
+// ==========================================
+
+async function handleBetCommand(message, args) {
+    const userId = message.author.id;
+    
+    if (args.length < 3) {
+        await message.reply('⚠️ Cách dùng: `!bet @người_chơi <số_xu> [kéo|búa|bao]`');
+        return;
+    }
+    
+    const target = message.mentions.users.first();
+    if (!target) {
+        await message.reply('⚠️ Vui lòng tag người muốn cược! Ví dụ: `!bet @user 100 kéo`');
+        return;
+    }
+    
+    if (target.id === userId) {
+        await message.reply('❌ Bạn không thể cược với chính mình!');
+        return;
+    }
+    
+    const amount = parseInt(args[1]);
+    if (isNaN(amount) || amount <= 0) {
+        await message.reply('⚠️ Vui lòng nhập số xu hợp lệ!');
+        return;
+    }
+    
+    const choice = args[2].toLowerCase();
+    const choices = ['kéo', 'búa', 'bao'];
+    if (!choices.includes(choice)) {
+        await message.reply('⚠️ Vui lòng chọn: `kéo`, `búa`, hoặc `bao`');
+        return;
+    }
+    
+    if (!removeMoney(userId, amount)) {
+        await message.reply(`❌ Bạn không có đủ ${CURRENCY.name}! Số dư: ${formatMoney(getBalance(userId))}`);
+        return;
+    }
+    
+    const gameId = Date.now().toString() + userId;
+    const betGame = new BetGame(userId, target.id, amount);
+    betGames.set(gameId, betGame);
+    
+    const embed = createEmbed(
+        '⚔️ Cược Với Người Chơi',
+        `💰 **${message.author.username}** đã thách đấu **${target.username}** với số tiền ${formatMoney(amount)}!\n\n` +
+        `📝 Lựa chọn của **${message.author.username}**: ${choice}\n` +
+        `⏳ Đợi **${target.username}** chọn lựa chọn của mình...\n\n` +
+        `Để chấp nhận, **${target.username}** hãy gõ:\n` +
+        `\`!bet accept ${gameId} [kéo|búa|bao]\``,
+        COLORS.GAME
+    );
+    
+    await message.reply({ embeds: [embed] });
+}
+
+async function handleBetAccept(message, args) {
+    const userId = message.author.id;
+    
+    if (args.length < 2) {
+        await message.reply('⚠️ Cách dùng: `!bet accept <game_id> [kéo|búa|bao]`');
+        return;
+    }
+    
+    const gameId = args[0];
+    const betGame = betGames.get(gameId);
+    
+    if (!betGame) {
+        await message.reply('❌ Game cược không tồn tại hoặc đã kết thúc!');
+        return;
+    }
+    
+    if (betGame.status === 'finished') {
+        await message.reply('❌ Game cược đã kết thúc!');
+        return;
+    }
+    
+    if (userId !== betGame.player2) {
+        await message.reply('❌ Bạn không phải người được mời tham gia game này!');
+        return;
+    }
+    
+    const choice = args[1].toLowerCase();
+    const choices = ['kéo', 'búa', 'bao'];
+    if (!choices.includes(choice)) {
+        await message.reply('⚠️ Vui lòng chọn: `kéo`, `búa`, hoặc `bao`');
+        return;
+    }
+    
+    if (!removeMoney(userId, betGame.amount)) {
+        await message.reply(`❌ Bạn không có đủ ${CURRENCY.name}! Cần ${formatMoney(betGame.amount)}`);
+        return;
+    }
+    
+    const result = betGame.makeChoice(userId, choice);
+    
+    if (result.result === 'waiting') {
+        await message.reply('⏳ Đợi đối thủ chọn...');
+        return;
+    }
+    
+    if (result.result === 'tie') {
+        addMoney(betGame.player1, betGame.amount);
+        addMoney(betGame.player2, betGame.amount);
+    } else if (result.result === 'player1') {
+        addMoney(betGame.player1, betGame.amount * 2);
+    } else if (result.result === 'player2') {
+        addMoney(betGame.player2, betGame.amount * 2);
+    }
+    
+    const embed = createEmbed(
+        '🏁 Kết Quả Cược',
+        result.message,
+        result.result === 'tie' ? COLORS.TIE : COLORS.SUCCESS
+    );
+    
+    await message.reply({ embeds: [embed] });
+    betGames.delete(gameId);
+}
+
+// ==========================================
+// 18. LỆNH LÔ ĐỀ - TÀI XỈU - XỔ SỐ
+// ==========================================
+
+async function handleDeCommand(message, args) {
+    const userId = message.author.id;
+    
+    if (args.length < 2) {
+        await message.reply('⚠️ Cách dùng: `!de <số> <cược>`\nVí dụ: `!de 23 100`');
+        return;
+    }
+    
+    const betNumber = args[0].padStart(2, '0');
+    if (!/^\d{2}$/.test(betNumber)) {
+        await message.reply('⚠️ Vui lòng nhập số từ 00 đến 99!');
+        return;
+    }
+    
+    const betAmount = parseInt(args[1]);
+    if (isNaN(betAmount) || betAmount <= 0) {
+        await message.reply('⚠️ Vui lòng nhập số xu hợp lệ!');
+        return;
+    }
+    
+    if (!removeMoney(userId, betAmount)) {
+        await message.reply(`❌ Bạn không có đủ ${CURRENCY.name}! Số dư: ${formatMoney(getBalance(userId))}`);
+        return;
+    }
+    
+    const result = generateLotteryResult();
+    const isWin = checkLotteryWin(betNumber, result);
+    let reward = 0;
+    let message = '';
+    
+    if (isWin) {
+        reward = calculateLotteryReward(betNumber, result, betAmount);
+        addMoney(userId, reward);
+        message = `🎉 **TRÚNG ĐỀ!** Số ${betNumber} đã về!\n💰 Bạn nhận được ${formatMoney(reward)}`;
+    } else {
+        message = `😢 Không trúng! Số ${betNumber} không về.\n💸 Bạn mất ${formatMoney(betAmount)}`;
+    }
+    
+    const embed = createEmbed(
+        '🎰 Kết Quả Xổ Số',
+        `**Giải Đặc Biệt:** ${result.special}\n**Giải Nhất:** ${result.first}\n**Giải Nhì:** ${result.second.join(' - ')}\n**Giải Ba:** ${result.third.join(' - ')}`,
+        isWin ? COLORS.SUCCESS : COLORS.ERROR,
+        [
+            { name: '📊 Kết quả', value: message, inline: false },
+            { name: '💰 Số dư mới', value: formatMoney(getBalance(userId)), inline: true }
+        ]
+    );
+    
+    await message.reply({ embeds: [embed] });
+}
+
+async function handleLoCommand(message, args) {
+    const userId = message.author.id;
+    
+    if (args.length < 2) {
+        await message.reply('⚠️ Cách dùng: `!lo <số> <cược>`\nVí dụ: `!lo 23 100`');
+        return;
+    }
+    
+    const betNumber = args[0].padStart(2, '0');
+    if (!/^\d{2}$/.test(betNumber)) {
+        await message.reply('⚠️ Vui lòng nhập số từ 00 đến 99!');
+        return;
+    }
+    
+    const betAmount = parseInt(args[1]);
+    if (isNaN(betAmount) || betAmount <= 0) {
+        await message.reply('⚠️ Vui lòng nhập số xu hợp lệ!');
+        return;
+    }
+    
+    if (!removeMoney(userId, betAmount)) {
+        await message.reply(`❌ Bạn không có đủ ${CURRENCY.name}! Số dư: ${formatMoney(getBalance(userId))}`);
+        return;
+    }
+    
+    const result = generateLotteryResult();
+    const isWin = checkLotteryWin(betNumber, result);
+    let reward = 0;
+    let message = '';
+    
+    if (isWin) {
+        reward = calculateLotteryReward(betNumber, result, betAmount);
+        addMoney(userId, reward);
+        message = `🎉 **TRÚNG LÔ!** Số ${betNumber} đã về!\n💰 Bạn nhận được ${formatMoney(reward)}`;
+    } else {
+        message = `😢 Không trúng! Số ${betNumber} không về.\n💸 Bạn mất ${formatMoney(betAmount)}`;
+    }
+    
+    const embed = createEmbed(
+        '🎰 Kết Quả Xổ Số',
+        `**Giải Đặc Biệt:** ${result.special}\n**Giải Nhất:** ${result.first}\n**Giải Nhì:** ${result.second.join(' - ')}\n**Giải Ba:** ${result.third.join(' - ')}`,
+        isWin ? COLORS.SUCCESS : COLORS.ERROR,
+        [
+            { name: '📊 Kết quả', value: message, inline: false },
+            { name: '💰 Số dư mới', value: formatMoney(getBalance(userId)), inline: true }
+        ]
+    );
+    
+    await message.reply({ embeds: [embed] });
+}
+
+async function handleTaiXiuCommand(message, args) {
+    const userId = message.author.id;
+    
+    if (args.length < 2) {
+        await message.reply('⚠️ Cách dùng: `!taixiu <tài|xiu> <cược>`\nVí dụ: `!taixiu tài 100`');
+        return;
+    }
+    
+    const choice = args[0].toLowerCase();
+    if (choice !== 'tài' && choice !== 'xiu') {
+        await message.reply('⚠️ Vui lòng chọn `tài` hoặc `xiu`!');
+        return;
+    }
+    
+    const betAmount = parseInt(args[1]);
+    if (isNaN(betAmount) || betAmount <= 0) {
+        await message.reply('⚠️ Vui lòng nhập số xu hợp lệ!');
+        return;
+    }
+    
+    if (!removeMoney(userId, betAmount)) {
+        await message.reply(`❌ Bạn không có đủ ${CURRENCY.name}! Số dư: ${formatMoney(getBalance(userId))}`);
+        return;
+    }
+    
+    const game = new TaiXiuGame(betAmount, choice);
+    const result = game.roll();
+    const isWin = game.checkWin();
+    let reward = 0;
+    let message = '';
+    
+    if (isWin) {
+        reward = game.getReward();
+        addMoney(userId, reward);
+        message = `🎉 **BẠN THẮNG!** ${choice} với tổng ${result.total}`;
+    } else {
+        message = `😢 **BẠN THUA!** ${choice} với tổng ${result.total}`;
+    }
+    
+    const diceEmojis = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
+    
+    const embed = createEmbed(
+        '🎲 Tài Xỉu',
+        `${diceEmojis[result.dice[0]-1]} ${diceEmojis[result.dice[1]-1]} ${diceEmojis[result.dice[2]-1]}\n**Tổng:** ${result.total}`,
+        isWin ? COLORS.SUCCESS : COLORS.ERROR,
+        [
+            { name: '📊 Kết quả', value: message, inline: false },
+            { name: '💰 Thưởng', value: isWin ? formatMoney(reward) : '0 xu', inline: true },
+            { name: '💰 Số dư mới', value: formatMoney(getBalance(userId)), inline: true }
+        ]
+    );
+    
+    await message.reply({ embeds: [embed] });
+}
+
+async function handleXosoCommand(message, args) {
+    const userId = message.author.id;
+    
+    if (args.length === 0) {
+        await message.reply('⚠️ Cách dùng: `!xoso <số lượng vé>`\nVí dụ: `!xoso 5` (mua 5 vé, mỗi vé 100 xu)');
+        return;
+    }
+    
+    const ticketCount = parseInt(args[0]);
+    if (isNaN(ticketCount) || ticketCount <= 0 || ticketCount > 20) {
+        await message.reply('⚠️ Vui lòng nhập số vé từ 1 đến 20!');
+        return;
+    }
+    
+    const ticketPrice = 100;
+    const totalCost = ticketCount * ticketPrice;
+    
+    if (!removeMoney(userId, totalCost)) {
+        await message.reply(`❌ Bạn không có đủ ${CURRENCY.name}! Cần ${formatMoney(totalCost)}`);
+        return;
+    }
+    
+    const tickets = [];
+    for (let i = 0; i < ticketCount; i++) {
+        tickets.push(generateLotteryNumber());
+    }
+    
+    const result = generateLotteryResult();
+    
+    let totalReward = 0;
+    let winTickets = [];
+    
+    for (const ticket of tickets) {
+        if (checkLotteryWin(ticket, result)) {
+            const reward = calculateLotteryReward(ticket, result, ticketPrice);
+            totalReward += reward;
+            winTickets.push({ number: ticket, reward: reward });
+        }
+    }
+    
+    if (totalReward > 0) {
+        addMoney(userId, totalReward);
+    }
+    
+    let message = '';
+    if (winTickets.length > 0) {
+        message = `🎉 **TRÚNG ${winTickets.length} VÉ!**\n`;
+        for (const win of winTickets) {
+            message += `Vé số ${win.number}: ${formatMoney(win.reward)}\n`;
+        }
+        message += `\n💰 Tổng thưởng: ${formatMoney(totalReward)}`;
+    } else {
+        message = `😢 Không trúng vé nào!`;
+    }
+    
+    const embed = createEmbed(
+        '🎰 Kết Quả Xổ Số',
+        `**Vé của bạn:** ${tickets.join(' - ')}\n\n**Giải Đặc Biệt:** ${result.special}\n**Giải Nhất:** ${result.first}\n**Giải Nhì:** ${result.second.join(' - ')}\n**Giải Ba:** ${result.third.join(' - ')}`,
+        totalReward > 0 ? COLORS.SUCCESS : COLORS.ERROR,
+        [
+            { name: '📊 Kết quả', value: message, inline: false },
+            { name: '💰 Số dư mới', value: formatMoney(getBalance(userId)), inline: true }
+        ]
+    );
+    
+    await message.reply({ embeds: [embed] });
+}
+
+async function handleXosoHistoryCommand(message) {
+    if (lotteryHistory.length === 0) {
+        await message.reply('📊 Chưa có lịch sử xổ số!');
+        return;
+    }
+    
+    const history = lotteryHistory.slice(-5).reverse();
+    let description = '📜 **Lịch sử 5 kỳ xổ số gần nhất:**\n\n';
+    
+    for (let i = 0; i < history.length; i++) {
+        const result = history[i];
+        description += `**Kỳ ${i + 1}:**\n`;
+        description += `ĐB: ${result.special} | Nhất: ${result.first} | Nhì: ${result.second.join(' ')} | Ba: ${result.third.join(' ')}\n\n`;
+    }
+    
+    const embed = createEmbed('📊 Lịch Sử Xổ Số', description, COLORS.INFO);
+    await message.reply({ embeds: [embed] });
+}
+
+// ==========================================
+// 19. LỆNH ADMIN
 // ==========================================
 
 async function handleAdminGiveMoney(message, args) {
@@ -834,11 +1731,10 @@ async function handleAdminBroadcast(message, args) {
         COLORS.ADMIN
     );
     
-    // Gửi đến tất cả server bot đang ở
     for (const guild of client.guilds.cache.values()) {
         try {
             const channel = guild.channels.cache
-                .filter(c => c.type === 0) // Text channels
+                .filter(c => c.type === 0)
                 .first();
             if (channel) {
                 await channel.send({ embeds: [embed] });
@@ -864,6 +1760,7 @@ async function handleAdminResetGames(message) {
     triviaGames.clear();
     blackjackGames.clear();
     memoryGames.clear();
+    betGames.clear();
 
     const embed = createEmbed(
         '✅ Admin: Reset Game',
@@ -882,10 +1779,11 @@ async function handleAdminClearData(message) {
 
     userBalances.clear();
     dailyCooldown.clear();
+    userPets.clear();
 
     const embed = createEmbed(
         '✅ Admin: Xóa Dữ Liệu',
-        'Tất cả dữ liệu tiền tệ đã được xóa!',
+        'Tất cả dữ liệu tiền tệ và pet đã được xóa!',
         COLORS.WARNING
     );
     await message.reply({ embeds: [embed] });
@@ -921,7 +1819,7 @@ async function handleAdminCommand(message, args) {
                 { name: '`!admin set @user <số>`', value: 'Set số xu cho người chơi', inline: true },
                 { name: '`!admin broadcast <nội dung>`', value: 'Gửi thông báo đến tất cả server', inline: true },
                 { name: '`!admin resetgames`', value: 'Reset tất cả game đang chạy', inline: true },
-                { name: '`!admin cleardata`', value: 'Xóa toàn bộ dữ liệu tiền tệ', inline: true },
+                { name: '`!admin cleardata`', value: 'Xóa toàn bộ dữ liệu', inline: true },
                 { name: '`!admin shutdown`', value: 'Tắt bot', inline: true }
             ]
         );
@@ -961,7 +1859,7 @@ async function handleAdminCommand(message, args) {
 }
 
 // ==========================================
-// 15. LỆNH TIỀN TỆ
+// 20. LỆNH TIỀN TỆ
 // ==========================================
 
 async function handleBalanceCommand(message) {
@@ -1064,7 +1962,7 @@ async function handleTransferCommand(message, args) {
 }
 
 // ==========================================
-// 16. XỬ LÝ LỆNH GAME
+// 21. XỬ LÝ LỆNH GAME CŨ
 // ==========================================
 
 async function handleGuessCommand(message, args) {
@@ -1473,7 +2371,7 @@ async function handleSlotCommand(message, args) {
 }
 
 // ==========================================
-// 17. XỬ LÝ BUTTON
+// 22. XỬ LÝ BUTTON
 // ==========================================
 
 async function handleTicTacToeButton(interaction) {
@@ -1653,7 +2551,7 @@ async function handleMemoryButton(interaction) {
 }
 
 // ==========================================
-// 18. LỆNH !GAME
+// 23. LỆNH !GAME
 // ==========================================
 
 async function handleGameCommand(message) {
@@ -1681,6 +2579,22 @@ async function handleGameCommand(message) {
             { name: '`!slot [cược]`', value: '🎰 Máy đánh bạc\n💰 Thưởng: x1.5 - x10', inline: true },
             { name: '`!tictactoe [cược]`', value: '🎮 Cờ caro với bot\n💰 Thưởng: 150-300 xu', inline: true },
             
+            { name: '━━━ 🐾 PET ━━━', value: '─────────────────', inline: false },
+            { name: '`!petshop`', value: '🏪 Xem cửa hàng pet', inline: true },
+            { name: '`!pet info`', value: '📊 Xem thông tin pet', inline: true },
+            { name: '`!pet feed`', value: '🍽️ Cho pet ăn', inline: true },
+            { name: '`!pet play`', value: '🎮 Chơi với pet', inline: true },
+            
+            { name: '━━━ 🎰 GAME XỔ SỐ ━━━', value: '─────────────────', inline: false },
+            { name: '`!de <số> <cược>`', value: '🎯 Đánh đề (1 ăn 70)\n💰 Thưởng: x70', inline: true },
+            { name: '`!lo <số> <cược>`', value: '🎯 Đánh lô (1 ăn 50)\n💰 Thưởng: x50', inline: true },
+            { name: '`!taixiu <tài|xiu> <cược>`', value: '🎲 Tài Xỉu\n💰 Thưởng: x2', inline: true },
+            { name: '`!xoso <số vé>`', value: '🎰 Mua vé số (100 xu/vé)\n💰 Thưởng: x70', inline: true },
+            { name: '`!xs history`', value: '📊 Xem lịch sử xổ số', inline: true },
+            
+            { name: '━━━ ⚔️ CƯỢC VỚI NGƯỜI KHÁC ━━━', value: '─────────────────', inline: false },
+            { name: '`!bet @user <số> <kéo|búa|bao>`', value: '⚔️ Thách đấu người chơi khác', inline: true },
+            
             { name: '━━━ 💰 HỆ THỐNG TIỀN TỆ ━━━', value: '─────────────────', inline: false },
             { name: '`!balance`', value: '💰 Kiểm tra số dư', inline: true },
             { name: '`!daily`', value: '🎁 Nhận thưởng ngày (500 xu)', inline: true },
@@ -1705,7 +2619,7 @@ async function handleGameCommand(message) {
 }
 
 // ==========================================
-// 19. LỆNH DICE, RPS
+// 24. LỆNH DICE, RPS
 // ==========================================
 
 async function handleDiceCommand(message) {
@@ -1795,7 +2709,7 @@ async function handleRPSCommand(message, args) {
 }
 
 // ==========================================
-// 20. SỰ KIỆN BOT
+// 25. SỰ KIỆN BOT
 // ==========================================
 
 client.once('ready', () => {
@@ -1834,6 +2748,7 @@ client.on(Events.MessageCreate, async (message) => {
                 await handleGameCommand(message);
                 break;
             
+            // Game cũ
             case 'guess':
                 await handleGuessCommand(message, args);
                 break;
@@ -1872,6 +2787,72 @@ client.on(Events.MessageCreate, async (message) => {
                 await handleSlotCommand(message, args);
                 break;
             
+            // Pet
+            case 'petshop':
+                await handlePetShop(message);
+                break;
+            case 'pet':
+                if (args.length === 0) {
+                    await handlePetInfo(message);
+                } else {
+                    const subCommand = args[0].toLowerCase();
+                    const subArgs = args.slice(1);
+                    switch (subCommand) {
+                        case 'buy':
+                            await handlePetBuy(message, subArgs);
+                            break;
+                        case 'info':
+                            await handlePetInfo(message);
+                            break;
+                        case 'feed':
+                            await handlePetFeed(message);
+                            break;
+                        case 'play':
+                            await handlePetPlay(message);
+                            break;
+                        case 'rest':
+                            await handlePetRest(message);
+                            break;
+                        case 'rename':
+                            await handlePetRename(message, subArgs);
+                            break;
+                        default:
+                            await message.reply('⚠️ Lệnh pet không hợp lệ! Các lệnh: `buy`, `info`, `feed`, `play`, `rest`, `rename`');
+                            break;
+                    }
+                }
+                break;
+            
+            // Cược
+            case 'bet':
+                if (args.length > 0 && args[0] === 'accept') {
+                    await handleBetAccept(message, args.slice(1));
+                } else {
+                    await handleBetCommand(message, args);
+                }
+                break;
+            
+            // Lô đề - Tài xỉu - Xổ số
+            case 'de':
+                await handleDeCommand(message, args);
+                break;
+            case 'lo':
+                await handleLoCommand(message, args);
+                break;
+            case 'taixiu':
+            case 'tx':
+                await handleTaiXiuCommand(message, args);
+                break;
+            case 'xoso':
+            case 'xs':
+                if (args.length > 0 && args[0] === 'history') {
+                    await handleXosoHistoryCommand(message);
+                } else {
+                    await handleXosoCommand(message, args);
+                }
+                break;
+            
+            // Tiền tệ
             case 'balance':
             case 'bal':
                 await handleBalanceCommand(message);
@@ -1888,6 +2869,7 @@ client.on(Events.MessageCreate, async (message) => {
                 await handleTransferCommand(message, args);
                 break;
             
+            // Admin
             case 'admin':
                 await handleAdminCommand(message, args);
                 break;
@@ -1902,7 +2884,7 @@ client.on(Events.MessageCreate, async (message) => {
 });
 
 // ==========================================
-// 21. KHỞI ĐỘNG BOT
+// 26. KHỞI ĐỘNG BOT
 // ==========================================
 
 const token = process.env.DISCORD_TOKEN;
