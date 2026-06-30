@@ -33,10 +33,9 @@ module.exports = {
     adminOnly: true,
 
     async execute(interaction, client) {
-        // Check if user has admin permissions
         if (!interaction.member.permissions.has('Administrator')) {
             return interaction.reply({
-                content: '❌ You need Administrator permissions to use this command!',
+                content: '❌ You need Administrator permissions!',
                 ephemeral: true
             });
         }
@@ -71,12 +70,11 @@ module.exports = {
             .setTitle('✅ Coins Given')
             .setDescription(`Gave **${amount.toLocaleString()}** coins to ${target.username}!`)
             .addFields(
-                { name: 'New Balance', value: `${user.coins.toLocaleString()} coins`, inline: true }
+                { name: 'Balance', value: `${user.coins.toLocaleString()} coins`, inline: true }
             )
             .setTimestamp();
 
         await interaction.editReply({ embeds: [embed] });
-        logger.info(`Admin ${interaction.user.tag} gave ${amount} coins to ${target.tag}`);
     },
 
     async giveExp(interaction) {
@@ -97,7 +95,7 @@ module.exports = {
             .setTitle('✅ EXP Given')
             .setDescription(`Gave **${amount}** EXP to ${target.username}!`)
             .addFields(
-                { name: 'New Level', value: `${user.level}`, inline: true },
+                { name: 'Level', value: `${user.level}`, inline: true },
                 { name: 'EXP', value: `${user.exp}/${user.expToNext}`, inline: true }
             );
 
@@ -111,7 +109,6 @@ module.exports = {
 
         embed.setTimestamp();
         await interaction.editReply({ embeds: [embed] });
-        logger.info(`Admin ${interaction.user.tag} gave ${amount} EXP to ${target.tag}`);
     },
 
     async resetData(interaction) {
@@ -135,7 +132,6 @@ module.exports = {
             .setTimestamp();
 
         await interaction.editReply({ embeds: [embed] });
-        logger.warn(`Admin ${interaction.user.tag} reset data for ${target.tag}`);
     },
 
     async maintenance(interaction, client) {
@@ -151,7 +147,6 @@ module.exports = {
             .setTimestamp();
 
         await interaction.editReply({ embeds: [embed] });
-        logger.warn(`Admin ${interaction.user.tag} ${enabled ? 'enabled' : 'disabled'} maintenance mode`);
     },
 
     async broadcast(interaction, client) {
@@ -191,6 +186,5 @@ module.exports = {
             .setTimestamp();
 
         await interaction.editReply({ embeds: [embed] });
-        logger.info(`Admin ${interaction.user.tag} broadcasted: ${message}`);
     }
 };
