@@ -13,17 +13,13 @@ module.exports = {
             .setName('weekly')
             .setDescription('Claim your weekly reward'))
         .addSubcommand(sub => sub
-            .setName('monthly')
-            .setDescription('Claim your monthly reward'))
-        .addSubcommand(sub => sub
             .setName('work')
             .setDescription('Work for coins')
             .addStringOption(opt => opt.setName('job').setRequired(false)
                 .addChoices(
                     { name: 'Miner', value: 'miner' },
                     { name: 'Farmer', value: 'farmer' },
-                    { name: 'Fisher', value: 'fisher' },
-                    { name: 'Hunter', value: 'hunter' }
+                    { name: 'Fisher', value: 'fisher' }
                 )))
         .addSubcommand(sub => sub
             .setName('beg')
@@ -51,14 +47,7 @@ module.exports = {
             .addUserOption(opt => opt.setName('user').setRequired(false)))
         .addSubcommand(sub => sub
             .setName('shop')
-            .setDescription('Browse the shop')
-            .addStringOption(opt => opt.setName('category').setRequired(false)
-                .addChoices(
-                    { name: 'Weapons', value: 'weapons' },
-                    { name: 'Armor', value: 'armor' },
-                    { name: 'Potions', value: 'potions' },
-                    { name: 'Special', value: 'special' }
-                )))
+            .setDescription('Browse the shop'))
         .addSubcommand(sub => sub
             .setName('buy')
             .setDescription('Buy an item from the shop')
@@ -73,7 +62,6 @@ module.exports = {
         switch (subcommand) {
             case 'daily': return this.daily(interaction);
             case 'weekly': return this.weekly(interaction);
-            case 'monthly': return this.monthly(interaction);
             case 'work': return this.work(interaction);
             case 'beg': return this.beg(interaction);
             case 'crime': return this.crime(interaction);
@@ -114,13 +102,11 @@ module.exports = {
             .setTitle('📅 Daily Reward')
             .setDescription(`You received **${reward.toLocaleString()}** coins!`)
             .addFields(
-                { name: 'Balance', value: `${user.coins.toLocaleString()} coins`, inline: true },
-                { name: 'Streak', value: `${user.statistics.dailyStreak || 0} days`, inline: true }
+                { name: 'Balance', value: `${user.coins.toLocaleString()} coins`, inline: true }
             )
             .setTimestamp();
 
         await interaction.editReply({ embeds: [embed] });
-        logger.info(`Daily claimed: ${interaction.user.tag} -> ${reward} coins`);
     },
 
     async weekly(interaction) {
@@ -154,37 +140,6 @@ module.exports = {
         await interaction.editReply({ embeds: [embed] });
     },
 
-    async monthly(interaction) {
-        await interaction.deferReply();
-        const user = await User.findOne({ userId: interaction.user.id });
-        if (!user) return interaction.editReply('❌ Create an account first!');
-
-        const now = Date.now();
-        const lastMonthly = user.cooldowns.monthly;
-        
-        if (lastMonthly && (now - lastMonthly.getTime()) < 2592000000) {
-            const timeLeft = 2592000000 - (now - lastMonthly.getTime());
-            const days = Math.floor(timeLeft / 86400000);
-            return interaction.editReply(`⏰ Already claimed! Come back in ${days} days.`);
-        }
-
-        const reward = parseInt(process.env.MONTHLY_REWARD) || 100000;
-        user.addCoins(reward);
-        user.cooldowns.monthly = new Date();
-        await user.save();
-
-        const embed = new EmbedBuilder()
-            .setColor('#9B59B6')
-            .setTitle('📈 Monthly Reward')
-            .setDescription(`You received **${reward.toLocaleString()}** coins!`)
-            .addFields(
-                { name: 'Balance', value: `${user.coins.toLocaleString()} coins`, inline: true }
-            )
-            .setTimestamp();
-
-        await interaction.editReply({ embeds: [embed] });
-    },
-
     async work(interaction) {
         await interaction.deferReply();
         const user = await User.findOne({ userId: interaction.user.id });
@@ -195,13 +150,7 @@ module.exports = {
         }
 
         const job = interaction.options.getString('job') || 'worker';
-        const jobMultipliers = {
-            miner: 1.5,
-            farmer: 1.3,
-            fisher: 1.2,
-            hunter: 1.4,
-            worker: 1.0
-        };
+        const jobMultipliers = { miner: 1.5, farmer: 1.3, fisher: 1.2, worker: 1.0 };
 
         const baseEarnings = Math.floor(Math.random() * 200) + 100;
         const earnings = Math.floor(baseEarnings * (jobMultipliers[job] || 1));
@@ -231,8 +180,7 @@ module.exports = {
             return interaction.editReply('⏰ You already begged recently! Wait 30 seconds.');
         }
 
-        const chance = Math.random();
-        const earnings = chance > 0.7 ? Math.floor(Math.random() * 100) + 50 : 0;
+        const earnings = Math.random() > 0.5 ? Math.floor(Math.random() * 100) + 50 : 0;
         
         if (earnings > 0) {
             user.addCoins(earnings);
@@ -243,7 +191,7 @@ module.exports = {
         const embed = new EmbedBuilder()
             .setColor(earnings > 0 ? '#00FF00' : '#FF0000')
             .setTitle('🙏 Beg')
-            .setDescription(earnings > 0 ? `Someone gave you **${earnings}** coins!` : 'No one gave you anything... Try again later!')
+            .setDescription(earnings > 0 ? `Someone gave you **${earnings}** coins!` : 'No one gave you anything...')
             .addFields(
                 { name: 'Balance', value: `${user.coins.toLocaleString()} coins`, inline: true }
             )
@@ -308,7 +256,6 @@ module.exports = {
         if (targetUser.coins < 100) return interaction.editReply('❌ This user is too poor to rob!');
 
         const success = Math.random() > 0.5;
-        let result = '';
         let amount = 0;
 
         if (success) {
@@ -354,56 +301,46 @@ module.exports = {
                     .setTitle('🏦 Bank Balance')
                     .addFields(
                         { name: 'Balance', value: `${user.bank.toLocaleString()} coins`, inline: true },
-                        { name: 'Capacity', value: `${user.bankCapacity.toLocaleString()} coins`, inline: true },
-                        { name: 'Interest Rate', value: `${(parseFloat(process.env.INTEREST_RATE) || 0.02) * 100}%`, inline: true }
+                        { name: 'Capacity', value: `${user.bankCapacity.toLocaleString()} coins`, inline: true }
                     )
                     .setTimestamp();
-
                 return interaction.editReply({ embeds: [embed] });
             }
-
             case 'deposit': {
                 if (!amount) return interaction.editReply('❌ Please specify an amount!');
                 if (amount > user.coins) return interaction.editReply(`❌ You only have ${user.coins} coins!`);
                 if (user.bank + amount > user.bankCapacity) {
                     return interaction.editReply(`❌ Bank capacity exceeded! Capacity: ${user.bankCapacity}`);
                 }
-
                 user.coins -= amount;
                 user.bank += amount;
                 await user.save();
-
                 const embed = new EmbedBuilder()
                     .setColor('#00FF00')
                     .setTitle('💰 Deposit')
-                    .setDescription(`Deposited **${amount.toLocaleString()}** coins to your bank!`)
+                    .setDescription(`Deposited **${amount.toLocaleString()}** coins!`)
                     .addFields(
                         { name: 'Bank Balance', value: `${user.bank.toLocaleString()} coins`, inline: true },
                         { name: 'Wallet', value: `${user.coins.toLocaleString()} coins`, inline: true }
                     )
                     .setTimestamp();
-
                 return interaction.editReply({ embeds: [embed] });
             }
-
             case 'withdraw': {
                 if (!amount) return interaction.editReply('❌ Please specify an amount!');
                 if (amount > user.bank) return interaction.editReply(`❌ You only have ${user.bank} coins in the bank!`);
-
                 user.bank -= amount;
                 user.coins += amount;
                 await user.save();
-
                 const embed = new EmbedBuilder()
                     .setColor('#FFA500')
                     .setTitle('🏦 Withdraw')
-                    .setDescription(`Withdrew **${amount.toLocaleString()}** coins from your bank!`)
+                    .setDescription(`Withdrew **${amount.toLocaleString()}** coins!`)
                     .addFields(
                         { name: 'Bank Balance', value: `${user.bank.toLocaleString()} coins`, inline: true },
                         { name: 'Wallet', value: `${user.coins.toLocaleString()} coins`, inline: true }
                     )
                     .setTimestamp();
-
                 return interaction.editReply({ embeds: [embed] });
             }
         }
@@ -437,62 +374,28 @@ module.exports = {
         const user = await User.findOne({ userId: interaction.user.id });
         if (!user) return interaction.editReply('❌ Create an account first!');
 
-        const category = interaction.options.getString('category') || 'all';
-        
-        // Shop items definition
-        const shopItems = {
-            weapons: [
-                { name: 'Wooden Sword', price: 1000, rarity: 'Common' },
-                { name: 'Iron Sword', price: 5000, rarity: 'Uncommon' },
-                { name: 'Steel Sword', price: 15000, rarity: 'Rare' },
-                { name: 'Diamond Sword', price: 50000, rarity: 'Epic' },
-                { name: 'Legendary Blade', price: 200000, rarity: 'Legendary' }
-            ],
-            armor: [
-                { name: 'Leather Armor', price: 2000, rarity: 'Common' },
-                { name: 'Iron Armor', price: 8000, rarity: 'Uncommon' },
-                { name: 'Steel Armor', price: 20000, rarity: 'Rare' },
-                { name: 'Diamond Armor', price: 60000, rarity: 'Epic' },
-                { name: 'Legendary Armor', price: 250000, rarity: 'Legendary' }
-            ],
-            potions: [
-                { name: 'Small HP Potion', price: 100, rarity: 'Common' },
-                { name: 'Medium HP Potion', price: 500, rarity: 'Uncommon' },
-                { name: 'Large HP Potion', price: 2000, rarity: 'Rare' },
-                { name: 'Mana Potion', price: 300, rarity: 'Common' },
-                { name: 'Stamina Potion', price: 500, rarity: 'Uncommon' }
-            ],
-            special: [
-                { name: 'Lucky Charm', price: 10000, rarity: 'Rare' },
-                { name: 'Exp Boost', price: 25000, rarity: 'Epic' },
-                { name: 'Coin Magnet', price: 15000, rarity: 'Rare' },
-                { name: 'Mystery Box', price: 5000, rarity: 'Epic' }
-            ]
-        };
-
-        let items = [];
-        if (category === 'all') {
-            for (const cat of Object.values(shopItems)) {
-                items = items.concat(cat);
-            }
-        } else {
-            items = shopItems[category] || [];
-        }
-
-        if (items.length === 0) {
-            return interaction.editReply('❌ No items found in this category!');
-        }
+        const shopItems = [
+            { name: 'Wooden Sword', price: 1000, rarity: 'Common' },
+            { name: 'Iron Sword', price: 5000, rarity: 'Uncommon' },
+            { name: 'Steel Sword', price: 15000, rarity: 'Rare' },
+            { name: 'Leather Armor', price: 2000, rarity: 'Common' },
+            { name: 'Iron Armor', price: 8000, rarity: 'Uncommon' },
+            { name: 'Small HP Potion', price: 100, rarity: 'Common' },
+            { name: 'Large HP Potion', price: 2000, rarity: 'Rare' },
+            { name: 'Mana Potion', price: 300, rarity: 'Common' },
+            { name: 'Lucky Charm', price: 10000, rarity: 'Rare' },
+            { name: 'Mystery Box', price: 5000, rarity: 'Epic' }
+        ];
 
         const embed = new EmbedBuilder()
             .setColor('#FFA500')
             .setTitle('🏪 Shop')
-            .setDescription(`Category: ${category}\nUse \`/economy buy [item]\` to purchase!`);
+            .setDescription('Use `/economy buy [item] [quantity]` to purchase!');
 
-        items.forEach(item => {
+        shopItems.forEach(item => {
             const rarityEmoji = item.rarity === 'Common' ? '⬜' :
                                item.rarity === 'Uncommon' ? '🟩' :
-                               item.rarity === 'Rare' ? '🟦' :
-                               item.rarity === 'Epic' ? '🟪' : '🟧';
+                               item.rarity === 'Rare' ? '🟦' : '🟪';
             embed.addFields({
                 name: `${rarityEmoji} ${item.name}`,
                 value: `💰 ${item.price.toLocaleString()} coins (${item.rarity})`,
@@ -512,49 +415,20 @@ module.exports = {
         const itemName = interaction.options.getString('item');
         const quantity = interaction.options.getInteger('quantity') || 1;
 
-        // Shop items definition (same as above)
-        const shopItems = {
-            weapons: [
-                { name: 'Wooden Sword', price: 1000, rarity: 'Common' },
-                { name: 'Iron Sword', price: 5000, rarity: 'Uncommon' },
-                { name: 'Steel Sword', price: 15000, rarity: 'Rare' },
-                { name: 'Diamond Sword', price: 50000, rarity: 'Epic' },
-                { name: 'Legendary Blade', price: 200000, rarity: 'Legendary' }
-            ],
-            armor: [
-                { name: 'Leather Armor', price: 2000, rarity: 'Common' },
-                { name: 'Iron Armor', price: 8000, rarity: 'Uncommon' },
-                { name: 'Steel Armor', price: 20000, rarity: 'Rare' },
-                { name: 'Diamond Armor', price: 60000, rarity: 'Epic' },
-                { name: 'Legendary Armor', price: 250000, rarity: 'Legendary' }
-            ],
-            potions: [
-                { name: 'Small HP Potion', price: 100, rarity: 'Common' },
-                { name: 'Medium HP Potion', price: 500, rarity: 'Uncommon' },
-                { name: 'Large HP Potion', price: 2000, rarity: 'Rare' },
-                { name: 'Mana Potion', price: 300, rarity: 'Common' },
-                { name: 'Stamina Potion', price: 500, rarity: 'Uncommon' }
-            ],
-            special: [
-                { name: 'Lucky Charm', price: 10000, rarity: 'Rare' },
-                { name: 'Exp Boost', price: 25000, rarity: 'Epic' },
-                { name: 'Coin Magnet', price: 15000, rarity: 'Rare' },
-                { name: 'Mystery Box', price: 5000, rarity: 'Epic' }
-            ]
-        };
+        const shopItems = [
+            { name: 'Wooden Sword', price: 1000 },
+            { name: 'Iron Sword', price: 5000 },
+            { name: 'Steel Sword', price: 15000 },
+            { name: 'Leather Armor', price: 2000 },
+            { name: 'Iron Armor', price: 8000 },
+            { name: 'Small HP Potion', price: 100 },
+            { name: 'Large HP Potion', price: 2000 },
+            { name: 'Mana Potion', price: 300 },
+            { name: 'Lucky Charm', price: 10000 },
+            { name: 'Mystery Box', price: 5000 }
+        ];
 
-        // Find item
-        let item = null;
-        let itemCategory = null;
-        for (const [category, items] of Object.entries(shopItems)) {
-            const found = items.find(i => i.name.toLowerCase() === itemName.toLowerCase());
-            if (found) {
-                item = found;
-                itemCategory = category;
-                break;
-            }
-        }
-
+        const item = shopItems.find(i => i.name.toLowerCase() === itemName.toLowerCase());
         if (!item) {
             return interaction.editReply(`❌ Item "${itemName}" not found in shop!`);
         }
@@ -566,15 +440,14 @@ module.exports = {
 
         user.removeCoins(totalPrice);
         
-        // Add to inventory
         const existingItem = user.inventory.find(i => i.name === item.name);
         if (existingItem) {
             existingItem.quantity += quantity;
         } else {
             user.inventory.push({
                 name: item.name,
-                type: itemCategory.slice(0, -1),
-                rarity: item.rarity,
+                type: 'shop',
+                rarity: 'Common',
                 quantity: quantity,
                 price: item.price
             });
@@ -587,12 +460,10 @@ module.exports = {
             .setTitle('✅ Purchase Successful')
             .setDescription(`You bought **${quantity}x ${item.name}** for **${totalPrice.toLocaleString()}** coins!`)
             .addFields(
-                { name: 'Rarity', value: item.rarity, inline: true },
-                { name: 'New Balance', value: `${user.coins.toLocaleString()} coins`, inline: true }
+                { name: 'Balance', value: `${user.coins.toLocaleString()} coins`, inline: true }
             )
             .setTimestamp();
 
         await interaction.editReply({ embeds: [embed] });
-        logger.info(`Purchase: ${interaction.user.tag} bought ${quantity}x ${item.name} for ${totalPrice} coins`);
     }
 };
