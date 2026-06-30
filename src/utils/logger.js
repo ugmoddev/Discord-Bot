@@ -20,7 +20,7 @@ const logger = winston.createLogger({
             format: winston.format.combine(
                 winston.format.colorize(),
                 winston.format.printf(({ level, message, timestamp, ...meta }) => {
-                    return `${timestamp} [${level}]: ${message} ${Object.keys(meta).length ? JSON.stringify(meta) : ''}`;
+                    return `${timestamp} [${level}]: ${message}`;
                 })
             )
         }),
@@ -30,10 +30,6 @@ const logger = winston.createLogger({
         }),
         new winston.transports.File({
             filename: path.join(logDir, 'combined.log')
-        }),
-        new winston.transports.File({
-            filename: path.join(logDir, 'commands.log'),
-            level: 'info'
         })
     ]
 });
