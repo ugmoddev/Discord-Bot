@@ -51,14 +51,12 @@ const COLORS = {
 const userBalances = new Map();
 const dailyCooldown = new Map();
 
-// Tên và biểu tượng tiền tệ
 const CURRENCY = {
     name: 'Xu',
     icon: '🪙',
     symbol: '💰'
 };
 
-// Phần thưởng cho từng game
 const REWARDS = {
     guess: { win: 100, lose: 10 },
     dice: { win: 50, lose: 0 },
@@ -117,7 +115,6 @@ const hangmanGames = new Map();
 const triviaGames = new Map();
 const blackjackGames = new Map();
 const memoryGames = new Map();
-const slotGames = new Map();
 
 // ==========================================
 // 5. CLASS GAME ĐOÁN SỐ
@@ -163,7 +160,63 @@ class GuessGame {
 }
 
 // ==========================================
-// 6. CLASS HANGMAN
+// 6. CLASS TICTACTOE
+// ==========================================
+
+class TicTacToe {
+    constructor() {
+        this.board = Array(9).fill(' ');
+        this.turn = 'player';
+        this.moves = 0;
+        this.bet = 0;
+    }
+
+    makeMove(index, player) {
+        if (this.board[index] !== ' ') return false;
+        if (player !== this.turn) return false;
+        
+        this.board[index] = player === 'player' ? 'X' : 'O';
+        this.moves++;
+        this.turn = this.turn === 'player' ? 'bot' : 'player';
+        return true;
+    }
+
+    checkWinner() {
+        const lines = [
+            [0, 1, 2], [3, 4, 5], [6, 7, 8],
+            [0, 3, 6], [1, 4, 7], [2, 5, 8],
+            [0, 4, 8], [2, 4, 6]
+        ];
+
+        for (const line of lines) {
+            const [a, b, c] = line;
+            if (this.board[a] !== ' ' && this.board[a] === this.board[b] && this.board[a] === this.board[c]) {
+                return this.board[a];
+            }
+        }
+        return null;
+    }
+
+    isFull() {
+        return this.moves === 9;
+    }
+
+    getEmptyCells() {
+        return this.board.map((cell, i) => cell === ' ' ? i : null).filter(i => i !== null);
+    }
+
+    botMove() {
+        const empty = this.getEmptyCells();
+        if (empty.length === 0) return -1;
+        
+        if (empty.includes(4)) return 4;
+        
+        return empty[Math.floor(Math.random() * empty.length)];
+    }
+}
+
+// ==========================================
+// 7. CLASS HANGMAN
 // ==========================================
 
 class HangmanGame {
@@ -179,6 +232,7 @@ class HangmanGame {
         this.guessed = new Set();
         this.attempts = 6;
         this.maxAttempts = 6;
+        this.bet = 0;
     }
 
     guessLetter(letter) {
@@ -272,7 +326,7 @@ class HangmanGame {
 }
 
 // ==========================================
-// 7. CLASS TRIVIA
+// 8. CLASS TRIVIA
 // ==========================================
 
 class TriviaGame {
@@ -349,7 +403,7 @@ class TriviaGame {
 }
 
 // ==========================================
-// 8. CLASS BLACKJACK
+// 9. CLASS BLACKJACK
 // ==========================================
 
 class BlackjackGame {
@@ -454,7 +508,7 @@ class BlackjackGame {
 }
 
 // ==========================================
-// 9. CLASS MEMORY
+// 10. CLASS MEMORY
 // ==========================================
 
 class MemoryGame {
@@ -514,7 +568,7 @@ class MemoryGame {
 }
 
 // ==========================================
-// 10. CLASS SLOT MACHINE
+// 11. CLASS SLOT MACHINE
 // ==========================================
 
 class SlotGame {
@@ -547,7 +601,7 @@ class SlotGame {
 }
 
 // ==========================================
-// 11. HÀM TIỆN ÍCH
+// 12. HÀM TIỆN ÍCH
 // ==========================================
 
 function createEmbed(title, description, color = COLORS.INFO, fields = []) {
@@ -617,7 +671,7 @@ function formatMoney(amount) {
 }
 
 // ==========================================
-// 12. LỆNH TIỀN TỆ
+// 13. LỆNH TIỀN TỆ
 // ==========================================
 
 async function handleBalanceCommand(message) {
@@ -720,17 +774,17 @@ async function handleTransferCommand(message, args) {
 }
 
 // ==========================================
-// 13. XỬ LÝ LỆNH GAME
+// 14. XỬ LÝ LỆNH GAME
 // ==========================================
 
 async function handleGuessCommand(message, args) {
     const userId = message.author.id;
-    let bet = 0;
+    let betAmount = 0;
     
     if (args.length > 0 && !isNaN(args[args.length - 1])) {
-        bet = parseInt(args.pop());
-        if (bet > 0) {
-            if (!removeMoney(userId, bet)) {
+        betAmount = parseInt(args.pop());
+        if (betAmount > 0) {
+            if (!removeMoney(userId, betAmount)) {
                 await message.reply(`❌ Bạn không có đủ ${CURRENCY.name}! Số dư: ${formatMoney(getBalance(userId))}`);
                 return;
             }
@@ -739,12 +793,12 @@ async function handleGuessCommand(message, args) {
 
     if (args.length === 0) {
         const game = new GuessGame();
-        game.bet = bet;
+        game.bet = betAmount;
         gameStates.set(userId, game);
 
         const embed = createEmbed(
             '🎯 Game Đoán Số',
-            `Tôi đã chọn một số từ 1 đến 100!\n${bet > 0 ? `💰 Cược: ${formatMoney(bet)}` : '💰 Chơi miễn phí'}`,
+            `Tôi đã chọn một số từ 1 đến 100!\n${betAmount > 0 ? `💰 Cược: ${formatMoney(betAmount)}` : '💰 Chơi miễn phí'}`,
             COLORS.SUCCESS,
             [
                 { name: '📝 Cách chơi', value: 'Gõ `!guess <số>` để đoán', inline: true },
@@ -774,20 +828,17 @@ async function handleGuessCommand(message, args) {
 
     const result = game.makeGuess(guess);
     
-    // Xử lý thưởng
     if (result.result === 'win') {
         const reward = Math.floor(REWARDS.guess.win * (game.bet > 0 ? 2 : 1));
         addMoney(userId, reward);
         result.message += `\n💰 Bạn nhận được ${formatMoney(reward)}`;
-    } else if (result.result === 'low' || result.result === 'high') {
-        // Không mất tiền cược nếu đoán sai
+        gameStates.delete(userId);
     }
 
     const embed = createEmbed('🎯 Game Đoán Số', result.message, result.color);
     
     if (game.guessed) {
         embed.addFields({ name: '📊 Thống kê', value: game.getStats() });
-        gameStates.delete(userId);
     }
 
     await message.reply({ embeds: [embed] });
@@ -795,14 +846,13 @@ async function handleGuessCommand(message, args) {
 
 async function handleTicTacToeCommand(message) {
     const userId = message.author.id;
-    let bet = 0;
+    let betAmount = 0;
     
-    // Kiểm tra xem có cược không
     const args = message.content.split(' ');
     if (args.length > 1) {
-        bet = parseInt(args[args.length - 1]);
-        if (bet > 0) {
-            if (!removeMoney(userId, bet)) {
+        betAmount = parseInt(args[args.length - 1]);
+        if (betAmount > 0) {
+            if (!removeMoney(userId, betAmount)) {
                 await message.reply(`❌ Bạn không có đủ ${CURRENCY.name}! Số dư: ${formatMoney(getBalance(userId))}`);
                 return;
             }
@@ -810,12 +860,13 @@ async function handleTicTacToeCommand(message) {
     }
 
     const game = new TicTacToe();
+    game.bet = betAmount;
     const gameId = Date.now().toString() + message.author.id;
-    ticTacToeGames.set(gameId, { game, bet });
+    ticTacToeGames.set(gameId, game);
 
     const embed = createEmbed(
         '🎮 Game Cờ Caro',
-        `**Lượt của bạn!** Chọn ô bên dưới\n${bet > 0 ? `💰 Cược: ${formatMoney(bet)}` : '💰 Chơi miễn phí'}`,
+        `**Lượt của bạn!** Chọn ô bên dưới\n${betAmount > 0 ? `💰 Cược: ${formatMoney(betAmount)}` : '💰 Chơi miễn phí'}`,
         COLORS.GAME,
         [
             { name: '❌ Bạn', value: 'X', inline: true },
@@ -825,18 +876,18 @@ async function handleTicTacToeCommand(message) {
 
     const rows = createTicTacToeBoard(game);
     const msg = await message.reply({ embeds: [embed], components: rows });
-    ticTacToeGames.set(msg.id, { game, bet });
+    ticTacToeGames.set(msg.id, game);
     ticTacToeGames.delete(gameId);
 }
 
 async function handleHangmanCommand(message, args) {
     const userId = message.author.id;
-    let bet = 0;
+    let betAmount = 0;
     
     if (args.length > 0 && !isNaN(args[args.length - 1])) {
-        bet = parseInt(args.pop());
-        if (bet > 0) {
-            if (!removeMoney(userId, bet)) {
+        betAmount = parseInt(args.pop());
+        if (betAmount > 0) {
+            if (!removeMoney(userId, betAmount)) {
                 await message.reply(`❌ Bạn không có đủ ${CURRENCY.name}! Số dư: ${formatMoney(getBalance(userId))}`);
                 return;
             }
@@ -845,11 +896,12 @@ async function handleHangmanCommand(message, args) {
     
     if (args.length === 0) {
         const game = new HangmanGame();
-        hangmanGames.set(userId, { game, bet });
+        game.bet = betAmount;
+        hangmanGames.set(userId, game);
         
         const embed = createEmbed(
             '🔤 Game Đoán Từ',
-            `Từ có ${game.word.length} chữ cái\n${game.getHangman()}\nTừ: ${game.getDisplay()}\n${bet > 0 ? `💰 Cược: ${formatMoney(bet)}` : '💰 Chơi miễn phí'}`,
+            `Từ có ${game.word.length} chữ cái\n${game.getHangman()}\nTừ: ${game.getDisplay()}\n${betAmount > 0 ? `💰 Cược: ${formatMoney(betAmount)}` : '💰 Chơi miễn phí'}`,
             COLORS.INFO,
             [
                 { name: '📝 Cách chơi', value: 'Gõ `!hangman <chữ cái>` để đoán', inline: true },
@@ -860,13 +912,12 @@ async function handleHangmanCommand(message, args) {
         return;
     }
 
-    const data = hangmanGames.get(userId);
-    if (!data) {
+    const game = hangmanGames.get(userId);
+    if (!game) {
         await message.reply('❌ Bạn chưa bắt đầu game! Gõ `!hangman` để bắt đầu.');
         return;
     }
 
-    const { game, bet } = data;
     const letter = args[0];
     if (letter.length !== 1 || !letter.match(/[a-zA-Z]/)) {
         await message.reply('⚠️ Vui lòng nhập 1 chữ cái!');
@@ -875,9 +926,8 @@ async function handleHangmanCommand(message, args) {
 
     const result = game.guessLetter(letter);
     
-    // Xử lý thưởng
     if (result.result === 'win') {
-        const reward = Math.floor(REWARDS.hangman.win * (bet > 0 ? 2 : 1));
+        const reward = Math.floor(REWARDS.hangman.win * (game.bet > 0 ? 2 : 1));
         addMoney(userId, reward);
         result.message += `\n💰 Bạn nhận được ${formatMoney(reward)}`;
         hangmanGames.delete(userId);
@@ -895,13 +945,13 @@ async function handleHangmanCommand(message, args) {
 
 async function handleTriviaCommand(message) {
     const userId = message.author.id;
-    let bet = 0;
+    let betAmount = 0;
     
     const args = message.content.split(' ');
     if (args.length > 1) {
-        bet = parseInt(args[args.length - 1]);
-        if (bet > 0) {
-            if (!removeMoney(userId, bet)) {
+        betAmount = parseInt(args[args.length - 1]);
+        if (betAmount > 0) {
+            if (!removeMoney(userId, betAmount)) {
                 await message.reply(`❌ Bạn không có đủ ${CURRENCY.name}! Số dư: ${formatMoney(getBalance(userId))}`);
                 return;
             }
@@ -910,17 +960,16 @@ async function handleTriviaCommand(message) {
     
     if (!triviaGames.has(userId)) {
         const game = new TriviaGame();
-        game.bet = bet;
-        triviaGames.set(userId, { game, bet });
+        game.bet = betAmount;
+        triviaGames.set(userId, game);
     }
     
-    const data = triviaGames.get(userId);
-    const { game } = data;
+    const game = triviaGames.get(userId);
     const question = game.getQuestion();
     
     const embed = createEmbed(
         '🧠 Game Đố Vui',
-        `**${question.question}**\n${bet > 0 ? `💰 Cược: ${formatMoney(bet)}` : '💰 Chơi miễn phí'}`,
+        `**${question.question}**\n${betAmount > 0 ? `💰 Cược: ${formatMoney(betAmount)}` : '💰 Chơi miễn phí'}`,
         COLORS.INFO,
         question.options.map((opt, i) => ({
             name: `Lựa chọn ${i + 1}`,
@@ -935,14 +984,13 @@ async function handleTriviaCommand(message) {
 
 async function handleTriviaAnswer(message, args) {
     const userId = message.author.id;
-    const data = triviaGames.get(userId);
+    const game = triviaGames.get(userId);
     
-    if (!data || !data.game.currentQuestion) {
+    if (!game || !game.currentQuestion) {
         await message.reply('❌ Bạn chưa bắt đầu game! Gõ `!trivia` để nhận câu hỏi.');
         return;
     }
 
-    const { game, bet } = data;
     const answer = parseInt(args[0]) - 1;
     if (isNaN(answer) || answer < 0 || answer > 3) {
         await message.reply('⚠️ Vui lòng chọn số từ 1 đến 4!');
@@ -954,7 +1002,7 @@ async function handleTriviaAnswer(message, args) {
     
     let reward = 0;
     if (correct) {
-        reward = Math.floor(REWARDS.trivia.win * (bet > 0 ? 2 : 1));
+        reward = Math.floor(REWARDS.trivia.win * (game.bet > 0 ? 2 : 1));
         addMoney(userId, reward);
         game.currentQuestion = null;
     }
@@ -969,19 +1017,19 @@ async function handleTriviaAnswer(message, args) {
     
     if (!correct) {
         game.currentQuestion = null;
-        triviaGames.set(userId, { game, bet });
+        triviaGames.set(userId, game);
     }
 }
 
 async function handleBlackjackCommand(message) {
     const userId = message.author.id;
-    let bet = 0;
+    let betAmount = 0;
     
     const args = message.content.split(' ');
     if (args.length > 1) {
-        bet = parseInt(args[args.length - 1]);
-        if (bet > 0) {
-            if (!removeMoney(userId, bet)) {
+        betAmount = parseInt(args[args.length - 1]);
+        if (betAmount > 0) {
+            if (!removeMoney(userId, betAmount)) {
                 await message.reply(`❌ Bạn không có đủ ${CURRENCY.name}! Số dư: ${formatMoney(getBalance(userId))}`);
                 return;
             }
@@ -994,13 +1042,13 @@ async function handleBlackjackCommand(message) {
     }
     
     const game = new BlackjackGame();
-    game.bet = bet;
-    blackjackGames.set(userId, { game, bet });
+    game.bet = betAmount;
+    blackjackGames.set(userId, game);
     
     const display = game.getDisplay();
     const embed = createEmbed(
         '🃏 Game Blackjack (21 Điểm)',
-        `🃏 ${display.player}\n🃏 ${display.bot}\n${bet > 0 ? `💰 Cược: ${formatMoney(bet)}` : '💰 Chơi miễn phí'}`,
+        `🃏 ${display.player}\n🃏 ${display.bot}\n${betAmount > 0 ? `💰 Cược: ${formatMoney(betAmount)}` : '💰 Chơi miễn phí'}`,
         COLORS.DICE,
         [
             { name: '📝 Cách chơi', value: 'Gõ `!bj hit` để rút thêm\nGõ `!bj stand` để dừng', inline: true }
@@ -1012,14 +1060,13 @@ async function handleBlackjackCommand(message) {
 
 async function handleBlackjackAction(message, action) {
     const userId = message.author.id;
-    const data = blackjackGames.get(userId);
+    const game = blackjackGames.get(userId);
     
-    if (!data) {
+    if (!game) {
         await message.reply('❌ Bạn chưa bắt đầu game! Gõ `!blackjack` để bắt đầu.');
         return;
     }
 
-    const { game, bet } = data;
     let result;
     
     if (action === 'hit') {
@@ -1035,13 +1082,10 @@ async function handleBlackjackAction(message, action) {
         return;
     }
 
-    // Xử lý thưởng
     if (result.result === 'win') {
-        const reward = Math.floor(REWARDS.blackjack.win * (bet > 0 ? 2 : 1));
+        const reward = Math.floor(REWARDS.blackjack.win * (game.bet > 0 ? 2 : 1));
         addMoney(userId, reward);
         result.message += `\n💰 Bạn nhận được ${formatMoney(reward)}`;
-    } else if (result.result === 'lose' && bet > 0) {
-        // Đã trừ tiền cược từ đầu
     }
 
     const display = game.getDisplay();
@@ -1065,13 +1109,13 @@ async function handleBlackjackAction(message, action) {
 
 async function handleMemoryCommand(message) {
     const userId = message.author.id;
-    let bet = 0;
+    let betAmount = 0;
     
     const args = message.content.split(' ');
     if (args.length > 1) {
-        bet = parseInt(args[args.length - 1]);
-        if (bet > 0) {
-            if (!removeMoney(userId, bet)) {
+        betAmount = parseInt(args[args.length - 1]);
+        if (betAmount > 0) {
+            if (!removeMoney(userId, betAmount)) {
                 await message.reply(`❌ Bạn không có đủ ${CURRENCY.name}! Số dư: ${formatMoney(getBalance(userId))}`);
                 return;
             }
@@ -1084,34 +1128,34 @@ async function handleMemoryCommand(message) {
     }
     
     const game = new MemoryGame();
-    game.bet = bet;
-    memoryGames.set(userId, { game, bet });
+    game.bet = betAmount;
+    memoryGames.set(userId, game);
     
     const embed = createEmbed(
         '🧩 Game Ghi Nhớ',
-        `Tìm các cặp thẻ giống nhau!\nLượt: 0\n${bet > 0 ? `💰 Cược: ${formatMoney(bet)}` : '💰 Chơi miễn phí'}`,
+        `Tìm các cặp thẻ giống nhau!\nLượt: 0\n${betAmount > 0 ? `💰 Cược: ${formatMoney(betAmount)}` : '💰 Chơi miễn phí'}`,
         COLORS.GAME
     );
     
     const rows = createMemoryBoard(game);
     const msg = await message.reply({ embeds: [embed], components: rows });
-    memoryGames.set(msg.id, { game, bet });
+    memoryGames.set(msg.id, game);
     memoryGames.delete(userId);
 }
 
 async function handleSlotCommand(message, args) {
     const userId = message.author.id;
-    let bet = 100;
+    let betAmount = 100;
     
     if (args.length > 0) {
-        bet = parseInt(args[0]);
-        if (isNaN(bet) || bet <= 0) {
+        betAmount = parseInt(args[0]);
+        if (isNaN(betAmount) || betAmount <= 0) {
             await message.reply('⚠️ Vui lòng nhập số xu hợp lệ!');
             return;
         }
     }
     
-    if (!removeMoney(userId, bet)) {
+    if (!removeMoney(userId, betAmount)) {
         await message.reply(`❌ Bạn không có đủ ${CURRENCY.name}! Số dư: ${formatMoney(getBalance(userId))}`);
         return;
     }
@@ -1122,13 +1166,13 @@ async function handleSlotCommand(message, args) {
     
     let reward = 0;
     if (win.win) {
-        reward = Math.floor(bet * win.multiplier);
+        reward = Math.floor(betAmount * win.multiplier);
         addMoney(userId, reward);
     }
     
     const embed = createEmbed(
         '🎰 Game Slot Machine',
-        `**${result.join(' | ')}**\n\n${win.message}\n${win.win ? `💰 Bạn nhận được ${formatMoney(reward)}` : `💸 Bạn mất ${formatMoney(bet)}`}`,
+        `**${result.join(' | ')}**\n\n${win.message}\n${win.win ? `💰 Bạn nhận được ${formatMoney(reward)}` : `💸 Bạn mất ${formatMoney(betAmount)}`}`,
         win.win ? COLORS.SUCCESS : COLORS.ERROR,
         [
             { name: '💰 Số dư hiện tại', value: formatMoney(getBalance(userId)), inline: true }
@@ -1139,19 +1183,18 @@ async function handleSlotCommand(message, args) {
 }
 
 // ==========================================
-// 14. XỬ LÝ BUTTON
+// 15. XỬ LÝ BUTTON
 // ==========================================
 
 async function handleTicTacToeButton(interaction) {
     const gameId = interaction.message.id;
-    const data = ticTacToeGames.get(gameId);
+    const game = ticTacToeGames.get(gameId);
     
-    if (!data) {
+    if (!game) {
         await interaction.reply({ content: '❌ Game đã kết thúc!', ephemeral: true });
         return;
     }
 
-    const { game, bet } = data;
     const index = parseInt(interaction.customId.split('_')[1]);
     
     if (game.board[index] !== ' ') {
@@ -1177,7 +1220,7 @@ async function handleTicTacToeButton(interaction) {
         const color = winner === 'X' ? COLORS.SUCCESS : COLORS.ERROR;
         
         if (winner === 'X') {
-            const reward = Math.floor(REWARDS.tictactoe.win * (bet > 0 ? 2 : 1));
+            const reward = Math.floor(REWARDS.tictactoe.win * (game.bet > 0 ? 2 : 1));
             addMoney(userId, reward);
             await interaction.update({ 
                 embeds: [createEmbed('🎮 Game Cờ Caro', `**${result}**\n💰 Bạn nhận được ${formatMoney(reward)}`, color)], 
@@ -1207,10 +1250,9 @@ async function handleTicTacToeButton(interaction) {
     await interaction.update({ embeds: [embed], components: rows });
 
     setTimeout(async () => {
-        const updatedData = ticTacToeGames.get(gameId);
-        if (!updatedData) return;
+        const updatedGame = ticTacToeGames.get(gameId);
+        if (!updatedGame) return;
 
-        const { game: updatedGame, bet: updatedBet } = updatedData;
         const botIndex = updatedGame.botMove();
         if (botIndex === -1) return;
 
@@ -1223,7 +1265,7 @@ async function handleTicTacToeButton(interaction) {
             
             let embed;
             if (winner2 === 'X') {
-                const reward = Math.floor(REWARDS.tictactoe.win * (updatedBet > 0 ? 2 : 1));
+                const reward = Math.floor(REWARDS.tictactoe.win * (updatedGame.bet > 0 ? 2 : 1));
                 addMoney(userId, reward);
                 embed = createEmbed('🎮 Game Cờ Caro', `**${result}**\n💰 Bạn nhận được ${formatMoney(reward)}`, color);
             } else {
@@ -1250,14 +1292,13 @@ async function handleTicTacToeButton(interaction) {
 
 async function handleMemoryButton(interaction) {
     const gameId = interaction.message.id;
-    const data = memoryGames.get(gameId);
+    const game = memoryGames.get(gameId);
     
-    if (!data) {
+    if (!game) {
         await interaction.reply({ content: '❌ Game đã kết thúc!', ephemeral: true });
         return;
     }
 
-    const { game, bet } = data;
     const index = parseInt(interaction.customId.split('_')[1]);
     
     if (game.matched.includes(index)) {
@@ -1284,7 +1325,7 @@ async function handleMemoryButton(interaction) {
     );
 
     if (result.result === 'win') {
-        const reward = Math.floor(REWARDS.memory.win * (bet > 0 ? 2 : 1));
+        const reward = Math.floor(REWARDS.memory.win * (game.bet > 0 ? 2 : 1));
         addMoney(interaction.user.id, reward);
         embed = createEmbed(
             '🧩 Game Ghi Nhớ',
@@ -1300,13 +1341,12 @@ async function handleMemoryButton(interaction) {
         await interaction.update({ embeds: [embed], components: rows });
         
         setTimeout(async () => {
-            const currentData = memoryGames.get(gameId);
-            if (!currentData) return;
+            const currentGame = memoryGames.get(gameId);
+            if (!currentGame) return;
             
-            const { game: currentGame } = currentData;
             const [i1, i2] = result.cards;
             currentGame.flipped = [];
-            currentGame.moves--; // Không tính lượt sai
+            currentGame.moves--;
             
             const newRows = createMemoryBoard(currentGame);
             const newEmbed = createEmbed(
@@ -1323,7 +1363,7 @@ async function handleMemoryButton(interaction) {
 }
 
 // ==========================================
-// 15. LỆNH !GAME (THAY THẾ !HELP)
+// 16. LỆNH !GAME
 // ==========================================
 
 async function handleGameCommand(message) {
@@ -1366,7 +1406,7 @@ async function handleGameCommand(message) {
 }
 
 // ==========================================
-// 16. XỬ LÝ LỆNH DICE, RPS
+// 17. LỆNH DICE, RPS
 // ==========================================
 
 async function handleDiceCommand(message) {
@@ -1456,7 +1496,7 @@ async function handleRPSCommand(message, args) {
 }
 
 // ==========================================
-// 17. SỰ KIỆN BOT
+// 18. SỰ KIỆN BOT
 // ==========================================
 
 client.once('ready', () => {
@@ -1490,12 +1530,10 @@ client.on(Events.MessageCreate, async (message) => {
 
     try {
         switch (command) {
-            // Lệnh chính
             case 'game':
                 await handleGameCommand(message);
                 break;
             
-            // Game cũ
             case 'guess':
                 await handleGuessCommand(message, args);
                 break;
@@ -1534,7 +1572,6 @@ client.on(Events.MessageCreate, async (message) => {
                 await handleSlotCommand(message, args);
                 break;
             
-            // Lệnh tiền tệ
             case 'balance':
             case 'bal':
                 await handleBalanceCommand(message);
@@ -1552,7 +1589,6 @@ client.on(Events.MessageCreate, async (message) => {
                 break;
             
             default:
-                // Không làm gì
                 break;
         }
     } catch (error) {
@@ -1562,7 +1598,7 @@ client.on(Events.MessageCreate, async (message) => {
 });
 
 // ==========================================
-// 18. KHỞI ĐỘNG BOT
+// 19. KHỞI ĐỘNG BOT
 // ==========================================
 
 const token = process.env.DISCORD_TOKEN;
