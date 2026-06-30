@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const User = require('../models/User');
 const { logger } = require('../utils/logger');
 
@@ -68,15 +68,10 @@ module.exports = {
             { name: '🦊 Fox', rarity: 'Uncommon', exp: 80 },
             { name: '🐺 Wolf', rarity: 'Uncommon', exp: 90 },
             { name: '🐉 Dragon', rarity: 'Rare', exp: 150 },
-            { name: '🦄 Unicorn', rarity: 'Rare', exp: 160 },
-            { name: '🐦 Phoenix', rarity: 'Epic', exp: 200 },
-            { name: '🐲 Hydra', rarity: 'Epic', exp: 220 },
-            { name: '⭐ Legendary Beast', rarity: 'Legendary', exp: 300 }
+            { name: '🦄 Unicorn', rarity: 'Rare', exp: 160 }
         ];
 
-        const catchRate = 0.3;
-        const success = Math.random() < catchRate;
-        
+        const success = Math.random() < 0.3;
         user.stats.stamina -= 15;
 
         let result = '';
@@ -119,13 +114,12 @@ module.exports = {
             .setDescription(result)
             .addFields(
                 { name: 'Stamina', value: `${user.stats.stamina}/${user.stats.maxStamina}`, inline: true },
-                { name: 'Pets Owned', value: `${user.pets.length}`, inline: true }
+                { name: 'Pets', value: `${user.pets.length}`, inline: true }
             );
 
         if (caughtPet) {
             embed.addFields(
-                { name: 'Rarity', value: caughtPet.rarity, inline: true },
-                { name: 'Stats', value: `HP: ${caughtPet.stats.hp}\nATK: ${caughtPet.stats.atk}\nDEF: ${caughtPet.stats.def}`, inline: true }
+                { name: 'Rarity', value: caughtPet.rarity, inline: true }
             );
         }
 
@@ -164,10 +158,8 @@ module.exports = {
                 { name: '🛡️ DEF', value: `${pet.stats.def}`, inline: true },
                 { name: '😊 Happiness', value: `${pet.happiness}%`, inline: true },
                 { name: '🍖 Hunger', value: `${pet.hunger}%`, inline: true },
-                { name: '✨ Evolution', value: `${pet.evolution}`, inline: true },
-                { name: '⚡ EXP', value: `${pet.exp}/100`, inline: true }
+                { name: '✨ Evolution', value: `${pet.evolution}`, inline: true }
             )
-            .setFooter({ text: `ID: ${pet.id}` })
             .setTimestamp();
 
         await interaction.editReply({ embeds: [embed] });
@@ -200,8 +192,7 @@ module.exports = {
             .setDescription(`You fed ${pet.name} some food!`)
             .addFields(
                 { name: 'Hunger', value: `${pet.hunger}%`, inline: true },
-                { name: 'Happiness', value: `${pet.happiness}%`, inline: true },
-                { name: 'Balance', value: `${user.coins} coins`, inline: true }
+                { name: 'Happiness', value: `${pet.happiness}%`, inline: true }
             )
             .setTimestamp();
 
@@ -233,7 +224,6 @@ module.exports = {
         pet.exp += 10;
         pet.happiness = Math.max(0, pet.happiness - 5);
 
-        // Level up check
         if (pet.exp >= 100) {
             pet.exp = 0;
             pet.level++;
@@ -250,8 +240,7 @@ module.exports = {
             .setDescription(`${pet.name} trained and gained +${statGain} ${stat.toUpperCase()}!`)
             .addFields(
                 { name: 'Level', value: `${pet.level}`, inline: true },
-                { name: 'EXP', value: `${pet.exp}/100`, inline: true },
-                { name: 'Happiness', value: `${pet.happiness}%`, inline: true }
+                { name: 'EXP', value: `${pet.exp}/100`, inline: true }
             )
             .setTimestamp();
 
@@ -282,9 +271,6 @@ module.exports = {
         pet.stats.hp += 20;
         pet.stats.atk += 10;
         pet.stats.def += 10;
-
-        const evolutionNames = ['', '⭐', '🌟🌟', '🌟🌟🌟', '🔱', '👑'];
-        pet.name = `${evolutionNames[pet.evolution]} ${pet.name.split(' ').slice(1).join(' ')}`;
 
         await user.save();
 
@@ -327,7 +313,6 @@ module.exports = {
 
         user.removeCoins(1000);
 
-        // Create offspring
         const offspring = {
             id: `pet_${Date.now()}`,
             name: `🐾 ${parent1.name.split(' ').slice(1).join(' ')} Jr.`,
@@ -335,8 +320,7 @@ module.exports = {
             level: 1,
             exp: 0,
             evolution: 0,
-            rarity: parent1.rarity === 'Legendary' || parent2.rarity === 'Legendary' ? 'Rare' : 
-                    parent1.rarity === 'Epic' || parent2.rarity === 'Epic' ? 'Uncommon' : 'Common',
+            rarity: parent1.rarity === 'Rare' || parent2.rarity === 'Rare' ? 'Uncommon' : 'Common',
             stats: {
                 hp: Math.floor((parent1.stats.hp + parent2.stats.hp) / 4),
                 atk: Math.floor((parent1.stats.atk + parent2.stats.atk) / 4),
@@ -379,7 +363,6 @@ module.exports = {
             return interaction.editReply('❌ Pet not found!');
         }
 
-        // Unequip current pet
         user.pets.forEach(p => p.equipped = false);
         pet.equipped = true;
         await user.save();
