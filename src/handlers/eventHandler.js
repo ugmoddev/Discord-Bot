@@ -1,0 +1,2 @@
+// eventHandler.js
+module.exports = {};

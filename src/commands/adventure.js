@@ -1,0 +1,2 @@
+// adventure.js
+module.exports = {};

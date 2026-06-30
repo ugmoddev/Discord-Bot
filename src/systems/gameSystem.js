@@ -1,0 +1,2 @@
+// gameSystem.js
+module.exports = {};

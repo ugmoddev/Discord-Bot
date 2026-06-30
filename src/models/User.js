@@ -1,0 +1,2 @@
+// User.js
+module.exports = {};

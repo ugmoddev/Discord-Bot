@@ -1,0 +1,2 @@
+// ready.js
+module.exports = {};

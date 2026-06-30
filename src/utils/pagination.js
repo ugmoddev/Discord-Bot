@@ -1,0 +1,2 @@
+// pagination.js
+module.exports = {};

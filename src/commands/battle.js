@@ -1,0 +1,2 @@
+// battle.js
+module.exports = {};

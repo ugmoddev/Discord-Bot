@@ -1,0 +1,2 @@
+// skillgames.js
+module.exports = {};

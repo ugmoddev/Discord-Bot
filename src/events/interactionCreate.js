@@ -1,0 +1,2 @@
+// interactionCreate.js
+module.exports = {};

@@ -1,0 +1,2 @@
+// gambling.js
+module.exports = {};

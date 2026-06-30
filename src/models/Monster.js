@@ -1,0 +1,2 @@
+// Monster.js
+module.exports = {};

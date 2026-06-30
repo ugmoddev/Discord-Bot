@@ -1,0 +1,2 @@
+// events.js
+module.exports = {};

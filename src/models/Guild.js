@@ -1,0 +1,2 @@
+// Guild.js
+module.exports = {};

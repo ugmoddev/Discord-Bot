@@ -1,0 +1,2 @@
+// embedBuilder.js
+module.exports = {};

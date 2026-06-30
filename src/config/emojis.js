@@ -1,0 +1,2 @@
+// emojis.js
+module.exports = {};

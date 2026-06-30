@@ -1,0 +1,2 @@
+// messageCreate.js
+module.exports = {};

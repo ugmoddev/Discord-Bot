@@ -1,0 +1,2 @@
+// Quest.js
+module.exports = {};

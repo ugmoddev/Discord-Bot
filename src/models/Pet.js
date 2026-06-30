@@ -1,0 +1,2 @@
+// Pet.js
+module.exports = {};
