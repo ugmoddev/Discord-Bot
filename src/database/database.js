@@ -1,2 +1,0 @@
-// database.js
-module.exports = {};
