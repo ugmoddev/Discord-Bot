@@ -1,5 +1,5 @@
 // ==========================================
-// DISCORD GAME BOT - PHIÊN BẢN CÓ TIỀN TỆ
+// DISCORD GAME BOT - PHIÊN BẢN CÓ ADMIN
 // ==========================================
 
 const { 
@@ -10,7 +10,8 @@ const {
     ButtonBuilder, 
     ButtonStyle,
     Events,
-    Partials
+    Partials,
+    PermissionsBitField
 } = require('discord.js');
 
 // ==========================================
@@ -22,11 +23,13 @@ const client = new Client({
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent,
+        GatewayIntentBits.GuildMembers,
     ],
     partials: [
         Partials.Message,
         Partials.Channel,
-        Partials.Reaction
+        Partials.Reaction,
+        Partials.GuildMember
     ]
 });
 
@@ -41,11 +44,40 @@ const COLORS = {
     TIE: 0xFFFF00,
     RARE: 0xFFD700,
     HORROR: 0x8B0000,
-    MONEY: 0x2ECC71
+    MONEY: 0x2ECC71,
+    ADMIN: 0xE74C3C
 };
 
 // ==========================================
-// 2. HỆ THỐNG TIỀN TỆ
+// 2. HỆ THỐNG ADMIN
+// ==========================================
+
+const ADMIN_IDS = [
+    '1316027180433801296', // Admin chính
+    // Thêm các ID admin khác vào đây nếu cần
+];
+
+const ADMIN_PERMISSIONS = {
+    GIVE_MONEY: 'give_money',
+    REMOVE_MONEY: 'remove_money',
+    SET_MONEY: 'set_money',
+    RESET_GAME: 'reset_game',
+    CLEAR_DATA: 'clear_data',
+    BROADCAST: 'broadcast',
+    SHUTDOWN: 'shutdown'
+};
+
+function isAdmin(userId) {
+    return ADMIN_IDS.includes(userId);
+}
+
+function hasPermission(userId, permission) {
+    if (!isAdmin(userId)) return false;
+    return true; // Admin có toàn quyền
+}
+
+// ==========================================
+// 3. HỆ THỐNG TIỀN TỆ
 // ==========================================
 
 const userBalances = new Map();
@@ -70,7 +102,7 @@ const REWARDS = {
 };
 
 // ==========================================
-// 3. HÀM QUẢN LÝ TIỀN TỆ
+// 4. HÀM QUẢN LÝ TIỀN TỆ
 // ==========================================
 
 function getBalance(userId) {
@@ -91,6 +123,12 @@ function removeMoney(userId, amount) {
     return true;
 }
 
+function setMoney(userId, amount) {
+    if (amount < 0) return false;
+    userBalances.set(userId, amount);
+    return true;
+}
+
 function canClaimDaily(userId) {
     const lastClaim = dailyCooldown.get(userId);
     if (!lastClaim) return true;
@@ -106,7 +144,7 @@ function getDailyCooldown(userId) {
 }
 
 // ==========================================
-// 4. LƯU TRỮ DỮ LIỆU GAME
+// 5. LƯU TRỮ DỮ LIỆU GAME
 // ==========================================
 
 const gameStates = new Map();
@@ -117,7 +155,7 @@ const blackjackGames = new Map();
 const memoryGames = new Map();
 
 // ==========================================
-// 5. CLASS GAME ĐOÁN SỐ
+// 6. CLASS GAME ĐOÁN SỐ
 // ==========================================
 
 class GuessGame {
@@ -160,7 +198,7 @@ class GuessGame {
 }
 
 // ==========================================
-// 6. CLASS TICTACTOE
+// 7. CLASS TICTACTOE
 // ==========================================
 
 class TicTacToe {
@@ -216,7 +254,7 @@ class TicTacToe {
 }
 
 // ==========================================
-// 7. CLASS HANGMAN
+// 8. CLASS HANGMAN
 // ==========================================
 
 class HangmanGame {
@@ -326,7 +364,7 @@ class HangmanGame {
 }
 
 // ==========================================
-// 8. CLASS TRIVIA
+// 9. CLASS TRIVIA
 // ==========================================
 
 class TriviaGame {
@@ -403,7 +441,7 @@ class TriviaGame {
 }
 
 // ==========================================
-// 9. CLASS BLACKJACK
+// 10. CLASS BLACKJACK
 // ==========================================
 
 class BlackjackGame {
@@ -508,7 +546,7 @@ class BlackjackGame {
 }
 
 // ==========================================
-// 10. CLASS MEMORY
+// 11. CLASS MEMORY
 // ==========================================
 
 class MemoryGame {
@@ -568,7 +606,7 @@ class MemoryGame {
 }
 
 // ==========================================
-// 11. CLASS SLOT MACHINE
+// 12. CLASS SLOT MACHINE
 // ==========================================
 
 class SlotGame {
@@ -601,7 +639,7 @@ class SlotGame {
 }
 
 // ==========================================
-// 12. HÀM TIỆN ÍCH
+// 13. HÀM TIỆN ÍCH
 // ==========================================
 
 function createEmbed(title, description, color = COLORS.INFO, fields = []) {
@@ -671,7 +709,259 @@ function formatMoney(amount) {
 }
 
 // ==========================================
-// 13. LỆNH TIỀN TỆ
+// 14. LỆNH ADMIN
+// ==========================================
+
+async function handleAdminGiveMoney(message, args) {
+    const userId = message.author.id;
+    if (!isAdmin(userId)) {
+        await message.reply('❌ Bạn không có quyền sử dụng lệnh này!');
+        return;
+    }
+
+    if (args.length < 2) {
+        await message.reply('⚠️ Cách dùng: `!admin give @user <số_xu>`');
+        return;
+    }
+
+    const target = message.mentions.users.first();
+    if (!target) {
+        await message.reply('⚠️ Vui lòng tag người cần cộng xu!');
+        return;
+    }
+
+    const amount = parseInt(args[1]);
+    if (isNaN(amount) || amount <= 0) {
+        await message.reply('⚠️ Vui lòng nhập số xu hợp lệ!');
+        return;
+    }
+
+    addMoney(target.id, amount);
+    const embed = createEmbed(
+        '✅ Admin: Cộng Xu',
+        `${CURRENCY.icon} Đã cộng **${amount.toLocaleString()}** ${CURRENCY.name} cho **${target.username}**\nSố dư mới: ${formatMoney(getBalance(target.id))}`,
+        COLORS.SUCCESS
+    );
+    await message.reply({ embeds: [embed] });
+}
+
+async function handleAdminRemoveMoney(message, args) {
+    const userId = message.author.id;
+    if (!isAdmin(userId)) {
+        await message.reply('❌ Bạn không có quyền sử dụng lệnh này!');
+        return;
+    }
+
+    if (args.length < 2) {
+        await message.reply('⚠️ Cách dùng: `!admin remove @user <số_xu>`');
+        return;
+    }
+
+    const target = message.mentions.users.first();
+    if (!target) {
+        await message.reply('⚠️ Vui lòng tag người cần trừ xu!');
+        return;
+    }
+
+    const amount = parseInt(args[1]);
+    if (isNaN(amount) || amount <= 0) {
+        await message.reply('⚠️ Vui lòng nhập số xu hợp lệ!');
+        return;
+    }
+
+    if (!removeMoney(target.id, amount)) {
+        await message.reply(`❌ ${target.username} không có đủ ${CURRENCY.name}!`);
+        return;
+    }
+
+    const embed = createEmbed(
+        '✅ Admin: Trừ Xu',
+        `${CURRENCY.icon} Đã trừ **${amount.toLocaleString()}** ${CURRENCY.name} của **${target.username}**\nSố dư mới: ${formatMoney(getBalance(target.id))}`,
+        COLORS.WARNING
+    );
+    await message.reply({ embeds: [embed] });
+}
+
+async function handleAdminSetMoney(message, args) {
+    const userId = message.author.id;
+    if (!isAdmin(userId)) {
+        await message.reply('❌ Bạn không có quyền sử dụng lệnh này!');
+        return;
+    }
+
+    if (args.length < 2) {
+        await message.reply('⚠️ Cách dùng: `!admin set @user <số_xu>`');
+        return;
+    }
+
+    const target = message.mentions.users.first();
+    if (!target) {
+        await message.reply('⚠️ Vui lòng tag người cần set xu!');
+        return;
+    }
+
+    const amount = parseInt(args[1]);
+    if (isNaN(amount) || amount < 0) {
+        await message.reply('⚠️ Vui lòng nhập số xu hợp lệ!');
+        return;
+    }
+
+    setMoney(target.id, amount);
+    const embed = createEmbed(
+        '✅ Admin: Set Xu',
+        `${CURRENCY.icon} Đã set số dư của **${target.username}** thành ${formatMoney(amount)}`,
+        COLORS.ADMIN
+    );
+    await message.reply({ embeds: [embed] });
+}
+
+async function handleAdminBroadcast(message, args) {
+    const userId = message.author.id;
+    if (!isAdmin(userId)) {
+        await message.reply('❌ Bạn không có quyền sử dụng lệnh này!');
+        return;
+    }
+
+    if (args.length === 0) {
+        await message.reply('⚠️ Cách dùng: `!admin broadcast <nội dung>`');
+        return;
+    }
+
+    const content = args.join(' ');
+    const embed = createEmbed(
+        '📢 Thông Báo Từ Admin',
+        content,
+        COLORS.ADMIN
+    );
+    
+    // Gửi đến tất cả server bot đang ở
+    for (const guild of client.guilds.cache.values()) {
+        try {
+            const channel = guild.channels.cache
+                .filter(c => c.type === 0) // Text channels
+                .first();
+            if (channel) {
+                await channel.send({ embeds: [embed] });
+            }
+        } catch (error) {
+            console.error(`Không thể gửi thông báo đến server ${guild.name}:`, error);
+        }
+    }
+    
+    await message.reply('✅ Đã gửi thông báo đến tất cả server!');
+}
+
+async function handleAdminResetGames(message) {
+    const userId = message.author.id;
+    if (!isAdmin(userId)) {
+        await message.reply('❌ Bạn không có quyền sử dụng lệnh này!');
+        return;
+    }
+
+    gameStates.clear();
+    ticTacToeGames.clear();
+    hangmanGames.clear();
+    triviaGames.clear();
+    blackjackGames.clear();
+    memoryGames.clear();
+
+    const embed = createEmbed(
+        '✅ Admin: Reset Game',
+        'Tất cả game đã được reset!',
+        COLORS.SUCCESS
+    );
+    await message.reply({ embeds: [embed] });
+}
+
+async function handleAdminClearData(message) {
+    const userId = message.author.id;
+    if (!isAdmin(userId)) {
+        await message.reply('❌ Bạn không có quyền sử dụng lệnh này!');
+        return;
+    }
+
+    userBalances.clear();
+    dailyCooldown.clear();
+
+    const embed = createEmbed(
+        '✅ Admin: Xóa Dữ Liệu',
+        'Tất cả dữ liệu tiền tệ đã được xóa!',
+        COLORS.WARNING
+    );
+    await message.reply({ embeds: [embed] });
+}
+
+async function handleAdminShutdown(message) {
+    const userId = message.author.id;
+    if (!isAdmin(userId)) {
+        await message.reply('❌ Bạn không có quyền sử dụng lệnh này!');
+        return;
+    }
+
+    await message.reply('🔴 Bot đang tắt...');
+    console.log('🔴 Bot đã được tắt bởi Admin');
+    process.exit(0);
+}
+
+async function handleAdminCommand(message, args) {
+    const userId = message.author.id;
+    if (!isAdmin(userId)) {
+        await message.reply('❌ Bạn không có quyền sử dụng lệnh này!');
+        return;
+    }
+
+    if (args.length === 0) {
+        const embed = createEmbed(
+            '🔐 Lệnh Admin',
+            'Danh sách lệnh quản trị:',
+            COLORS.ADMIN,
+            [
+                { name: '`!admin give @user <số>`', value: 'Cộng xu cho người chơi', inline: true },
+                { name: '`!admin remove @user <số>`', value: 'Trừ xu của người chơi', inline: true },
+                { name: '`!admin set @user <số>`', value: 'Set số xu cho người chơi', inline: true },
+                { name: '`!admin broadcast <nội dung>`', value: 'Gửi thông báo đến tất cả server', inline: true },
+                { name: '`!admin resetgames`', value: 'Reset tất cả game đang chạy', inline: true },
+                { name: '`!admin cleardata`', value: 'Xóa toàn bộ dữ liệu tiền tệ', inline: true },
+                { name: '`!admin shutdown`', value: 'Tắt bot', inline: true }
+            ]
+        );
+        await message.reply({ embeds: [embed] });
+        return;
+    }
+
+    const subCommand = args[0].toLowerCase();
+    const subArgs = args.slice(1);
+
+    switch (subCommand) {
+        case 'give':
+            await handleAdminGiveMoney(message, subArgs);
+            break;
+        case 'remove':
+            await handleAdminRemoveMoney(message, subArgs);
+            break;
+        case 'set':
+            await handleAdminSetMoney(message, subArgs);
+            break;
+        case 'broadcast':
+            await handleAdminBroadcast(message, subArgs);
+            break;
+        case 'resetgames':
+            await handleAdminResetGames(message);
+            break;
+        case 'cleardata':
+            await handleAdminClearData(message);
+            break;
+        case 'shutdown':
+            await handleAdminShutdown(message);
+            break;
+        default:
+            await message.reply('⚠️ Lệnh admin không hợp lệ! Gõ `!admin` để xem danh sách.');
+            break;
+    }
+}
+
+// ==========================================
+// 15. LỆNH TIỀN TỆ
 // ==========================================
 
 async function handleBalanceCommand(message) {
@@ -774,7 +1064,7 @@ async function handleTransferCommand(message, args) {
 }
 
 // ==========================================
-// 14. XỬ LÝ LỆNH GAME
+// 16. XỬ LÝ LỆNH GAME
 // ==========================================
 
 async function handleGuessCommand(message, args) {
@@ -1183,7 +1473,7 @@ async function handleSlotCommand(message, args) {
 }
 
 // ==========================================
-// 15. XỬ LÝ BUTTON
+// 17. XỬ LÝ BUTTON
 // ==========================================
 
 async function handleTicTacToeButton(interaction) {
@@ -1363,16 +1653,17 @@ async function handleMemoryButton(interaction) {
 }
 
 // ==========================================
-// 16. LỆNH !GAME
+// 18. LỆNH !GAME
 // ==========================================
 
 async function handleGameCommand(message) {
     const userId = message.author.id;
     const balance = getBalance(userId);
+    const isAdminUser = isAdmin(userId);
     
     const embed = createEmbed(
         '🎮 **TRUNG TÂM GAME** 🎮',
-        `💰 Số dư: ${formatMoney(balance)}`,
+        `💰 Số dư: ${formatMoney(balance)}${isAdminUser ? '\n🔐 **Bạn là Admin!**' : ''}`,
         COLORS.INFO,
         [
             { name: '━━━ 🎯 GAME GIẢI TRÍ ━━━', value: '─────────────────', inline: false },
@@ -1402,11 +1693,19 @@ async function handleGameCommand(message) {
         ]
     );
     
+    if (isAdminUser) {
+        embed.addFields({
+            name: '━━━ 🔐 LỆNH ADMIN ━━━',
+            value: '─────────────────\n`!admin` để xem danh sách lệnh quản trị',
+            inline: false
+        });
+    }
+    
     await message.reply({ embeds: [embed] });
 }
 
 // ==========================================
-// 17. LỆNH DICE, RPS
+// 19. LỆNH DICE, RPS
 // ==========================================
 
 async function handleDiceCommand(message) {
@@ -1496,7 +1795,7 @@ async function handleRPSCommand(message, args) {
 }
 
 // ==========================================
-// 18. SỰ KIỆN BOT
+// 20. SỰ KIỆN BOT
 // ==========================================
 
 client.once('ready', () => {
@@ -1505,6 +1804,7 @@ client.once('ready', () => {
     console.log(`📛 Tên: ${client.user.tag}`);
     console.log(`🌐 Server: ${client.guilds.cache.size}`);
     console.log(`👥 Users: ${client.users.cache.size}`);
+    console.log(`🔐 Admin ID: ${ADMIN_IDS.join(', ')}`);
     console.log('='.repeat(50));
     client.user.setActivity('!game để xem game', { type: 'PLAYING' });
 });
@@ -1588,6 +1888,10 @@ client.on(Events.MessageCreate, async (message) => {
                 await handleTransferCommand(message, args);
                 break;
             
+            case 'admin':
+                await handleAdminCommand(message, args);
+                break;
+            
             default:
                 break;
         }
@@ -1598,7 +1902,7 @@ client.on(Events.MessageCreate, async (message) => {
 });
 
 // ==========================================
-// 19. KHỞI ĐỘNG BOT
+// 21. KHỞI ĐỘNG BOT
 // ==========================================
 
 const token = process.env.DISCORD_TOKEN;
