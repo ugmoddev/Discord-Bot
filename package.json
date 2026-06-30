@@ -1,11 +1,10 @@
 {
-  "name": "discord-bot",
+  "name": "discord-game-bot",
   "version": "1.0.0",
-  "description": "Discord Bot đơn giản cho Render",
+  "description": "Bot Discord với nhiều game tích hợp",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "deploy": "node deploy-commands.js",
     "dev": "nodemon index.js"
   },
   "dependencies": {
@@ -17,5 +16,8 @@
   },
   "engines": {
     "node": ">=18.0.0"
-  }
+  },
+  "keywords": ["discord", "bot", "game", "javascript"],
+  "author": "Your Name",
+  "license": "MIT"
 }
