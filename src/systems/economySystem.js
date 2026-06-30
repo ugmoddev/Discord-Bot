@@ -1,2 +1,0 @@
-// economySystem.js
-module.exports = {};
