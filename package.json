@@ -1,7 +1,7 @@
 {
   "name": "discord-game-bot",
   "version": "2.0.0",
-  "description": "Bot Discord với nhiều game và hệ thống tiền tệ",
+  "description": "Bot Discord đa năng với game, pet, xổ số, tài xỉu, lô đề",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
