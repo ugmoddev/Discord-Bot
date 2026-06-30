@@ -13,9 +13,7 @@ module.exports = {
                 .addChoices(
                     { name: 'Forest', value: 'forest' },
                     { name: 'Cave', value: 'cave' },
-                    { name: 'Desert', value: 'desert' },
-                    { name: 'Jungle', value: 'jungle' },
-                    { name: 'Mountain', value: 'mountain' }
+                    { name: 'Desert', value: 'desert' }
                 )))
         .addSubcommand(sub => sub
             .setName('hunt')
@@ -31,10 +29,7 @@ module.exports = {
             .setDescription('Go farming'))
         .addSubcommand(sub => sub
             .setName('treasure')
-            .setDescription('Search for treasure'))
-        .addSubcommand(sub => sub
-            .setName('expedition')
-            .setDescription('Go on an expedition')),
+            .setDescription('Search for treasure')),
 
     cooldown: 60,
 
@@ -48,7 +43,6 @@ module.exports = {
             case 'mine': return this.mine(interaction);
             case 'farm': return this.farm(interaction);
             case 'treasure': return this.treasure(interaction);
-            case 'expedition': return this.expedition(interaction);
             default: return interaction.reply('❌ Unknown adventure command!');
         }
     },
@@ -65,9 +59,7 @@ module.exports = {
         const areas = {
             forest: { monsters: ['Wolf', 'Bear', 'Deer'], reward: 1.0 },
             cave: { monsters: ['Bat', 'Goblin', 'Troll'], reward: 1.3 },
-            desert: { monsters: ['Scorpion', 'Snake', 'Mummy'], reward: 1.4 },
-            jungle: { monsters: ['Panther', 'Tiger', 'Anaconda'], reward: 1.5 },
-            mountain: { monsters: ['Eagle', 'Yeti', 'Dragon'], reward: 1.6 }
+            desert: { monsters: ['Scorpion', 'Snake', 'Mummy'], reward: 1.4 }
         };
 
         const area = interaction.options.getString('area') || 'forest';
@@ -80,6 +72,7 @@ module.exports = {
 
         user.addExp(expGain);
         user.addCoins(coinGain);
+        user.statistics.totalAdventures = (user.statistics.totalAdventures || 0) + 1;
         await user.save();
 
         const embed = new EmbedBuilder()
@@ -94,7 +87,6 @@ module.exports = {
             .setTimestamp();
 
         await interaction.editReply({ embeds: [embed] });
-        logger.info(`Explore: ${interaction.user.tag} explored ${area}`);
     },
 
     async hunt(interaction) {
@@ -108,23 +100,22 @@ module.exports = {
 
         user.stats.stamina -= 15;
         const success = Math.random() > 0.3;
-        let result = '';
 
         if (success) {
-            const prey = ['Deer', 'Rabbit', 'Boar', 'Fox', 'Bear'];
+            const prey = ['Deer', 'Rabbit', 'Boar', 'Fox'];
             const caught = prey[Math.floor(Math.random() * prey.length)];
             const expGain = Math.floor(30 + user.level * 3);
             const coinGain = Math.floor(80 + user.level * 8);
             
             user.addExp(expGain);
             user.addCoins(coinGain);
-            result = `🎯 You caught a ${caught}!`;
+            user.statistics.totalAdventures = (user.statistics.totalAdventures || 0) + 1;
             await user.save();
 
             const embed = new EmbedBuilder()
                 .setColor('#00FF00')
                 .setTitle('🏹 Hunting')
-                .setDescription(result)
+                .setDescription(`🎯 You caught a ${caught}!`)
                 .addFields(
                     { name: '✨ EXP', value: `+${expGain}`, inline: true },
                     { name: '💰 Coins', value: `+${coinGain}`, inline: true },
@@ -134,13 +125,11 @@ module.exports = {
 
             await interaction.editReply({ embeds: [embed] });
         } else {
-            result = '🦌 You missed your shot! Try again.';
             await user.save();
-
             const embed = new EmbedBuilder()
                 .setColor('#FF0000')
                 .setTitle('🏹 Hunting')
-                .setDescription(result)
+                .setDescription('🦌 You missed your shot! Try again.')
                 .addFields(
                     { name: '⚡ Stamina', value: `${user.stats.stamina}/${user.stats.maxStamina}`, inline: true }
                 )
@@ -160,13 +149,14 @@ module.exports = {
         }
 
         user.stats.stamina -= 10;
-        const fish = ['🐟 Salmon', '🐠 Trout', '🐡 Pufferfish', '🐋 Whale', '🦈 Shark'];
+        const fish = ['🐟 Salmon', '🐠 Trout', '🐡 Pufferfish', '🐋 Whale'];
         const caught = fish[Math.floor(Math.random() * fish.length)];
         const expGain = Math.floor(20 + user.level * 2);
         const coinGain = Math.floor(60 + user.level * 6);
 
         user.addExp(expGain);
         user.addCoins(coinGain);
+        user.statistics.totalAdventures = (user.statistics.totalAdventures || 0) + 1;
         await user.save();
 
         const embed = new EmbedBuilder()
@@ -193,13 +183,14 @@ module.exports = {
         }
 
         user.stats.stamina -= 15;
-        const ores = ['Coal', 'Iron', 'Gold', 'Diamond', 'Ruby', 'Emerald'];
+        const ores = ['Coal', 'Iron', 'Gold', 'Diamond'];
         const found = ores[Math.floor(Math.random() * ores.length)];
         const expGain = Math.floor(25 + user.level * 2);
         const coinGain = Math.floor(70 + user.level * 7);
 
         user.addExp(expGain);
         user.addCoins(coinGain);
+        user.statistics.totalAdventures = (user.statistics.totalAdventures || 0) + 1;
         await user.save();
 
         const embed = new EmbedBuilder()
@@ -226,13 +217,14 @@ module.exports = {
         }
 
         user.stats.stamina -= 10;
-        const crops = ['Wheat', 'Corn', 'Carrots', 'Potatoes', 'Tomatoes'];
+        const crops = ['Wheat', 'Corn', 'Carrots', 'Potatoes'];
         const harvested = crops[Math.floor(Math.random() * crops.length)];
         const expGain = Math.floor(15 + user.level * 2);
         const coinGain = Math.floor(50 + user.level * 5);
 
         user.addExp(expGain);
         user.addCoins(coinGain);
+        user.statistics.totalAdventures = (user.statistics.totalAdventures || 0) + 1;
         await user.save();
 
         const embed = new EmbedBuilder()
@@ -263,13 +255,13 @@ module.exports = {
             { name: 'Ancient Coin', exp: 50, coins: 500 },
             { name: 'Gold Crown', exp: 80, coins: 1000 },
             { name: 'Diamond Ring', exp: 100, coins: 2000 },
-            { name: 'Mysterious Gem', exp: 150, coins: 5000 },
-            { name: 'Legendary Artifact', exp: 200, coins: 10000 }
+            { name: 'Mysterious Gem', exp: 150, coins: 5000 }
         ];
 
         const found = treasures[Math.floor(Math.random() * treasures.length)];
         user.addExp(found.exp);
         user.addCoins(found.coins);
+        user.statistics.totalAdventures = (user.statistics.totalAdventures || 0) + 1;
         await user.save();
 
         const embed = new EmbedBuilder()
@@ -284,71 +276,5 @@ module.exports = {
             .setTimestamp();
 
         await interaction.editReply({ embeds: [embed] });
-    },
-
-    async expedition(interaction) {
-        await interaction.deferReply();
-        const user = await User.findOne({ userId: interaction.user.id });
-        if (!user) return interaction.editReply('❌ Create an account first!');
-
-        if (user.stats.stamina < 30) {
-            return interaction.editReply('❌ Not enough stamina! Need 30.');
-        }
-
-        user.stats.stamina -= 30;
-        const success = Math.random() > 0.4;
-        let result = '';
-
-        if (success) {
-            const expGain = Math.floor(100 + user.level * 10);
-            const coinGain = Math.floor(200 + user.level * 20);
-            const itemChance = Math.random() > 0.7;
-            
-            user.addExp(expGain);
-            user.addCoins(coinGain);
-            
-            if (itemChance) {
-                const items = ['Mysterious Potion', 'Ancient Scroll', 'Magic Gem'];
-                const item = items[Math.floor(Math.random() * items.length)];
-                user.inventory.push({
-                    name: item,
-                    type: 'special',
-                    rarity: 'Rare',
-                    quantity: 1
-                });
-                result = `🎉 Expedition successful! You found ${item}!`;
-            } else {
-                result = '🎉 Expedition successful! You found treasures!';
-            }
-            
-            await user.save();
-
-            const embed = new EmbedBuilder()
-                .setColor('#00FF00')
-                .setTitle('🗺️ Expedition')
-                .setDescription(result)
-                .addFields(
-                    { name: '✨ EXP', value: `+${expGain}`, inline: true },
-                    { name: '💰 Coins', value: `+${coinGain}`, inline: true },
-                    { name: '⚡ Stamina', value: `${user.stats.stamina}/${user.stats.maxStamina}`, inline: true }
-                )
-                .setTimestamp();
-
-            await interaction.editReply({ embeds: [embed] });
-        } else {
-            result = '💨 The expedition failed! You encountered dangerous creatures.';
-            await user.save();
-
-            const embed = new EmbedBuilder()
-                .setColor('#FF0000')
-                .setTitle('🗺️ Expedition')
-                .setDescription(result)
-                .addFields(
-                    { name: '⚡ Stamina', value: `${user.stats.stamina}/${user.stats.maxStamina}`, inline: true }
-                )
-                .setTimestamp();
-
-            await interaction.editReply({ embeds: [embed] });
-        }
     }
 };
