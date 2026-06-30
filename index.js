@@ -9,15 +9,12 @@ const {
     ActionRowBuilder, 
     ButtonBuilder, 
     ButtonStyle,
-    Events 
+    Events,
+    Partials  // THÊM PARTIALS
 } = require('discord.js');
 
-// KHÔNG CẦN dotenv NỮA
-// const dotenv = require('dotenv');
-// dotenv.config();
-
 // ==========================================
-// 1. CẤU HÌNH BOT
+// 1. CẤU HÌNH BOT - SỬA INTENTS
 // ==========================================
 
 const client = new Client({
@@ -25,6 +22,13 @@ const client = new Client({
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent,
+        GatewayIntentBits.GuildMembers,  // THÊM
+        GatewayIntentBits.GuildMessageReactions,  // THÊM
+    ],
+    partials: [
+        Partials.Message,
+        Partials.Channel,
+        Partials.Reaction
     ]
 });
 
@@ -43,8 +47,8 @@ const COLORS = {
 // 2. LƯU TRỮ DỮ LIỆU GAME
 // ==========================================
 
-const gameStates = new Map();        // Lưu game đoán số
-const ticTacToeGames = new Map();    // Lưu game cờ caro
+const gameStates = new Map();
+const ticTacToeGames = new Map();
 
 // ==========================================
 // 3. CLASS GAME ĐOÁN SỐ
@@ -137,10 +141,8 @@ class TicTacToe {
         const empty = this.getEmptyCells();
         if (empty.length === 0) return -1;
         
-        // Ưu tiên chọn ô giữa
         if (empty.includes(4)) return 4;
         
-        // Chọn ngẫu nhiên
         return empty[Math.floor(Math.random() * empty.length)];
     }
 }
@@ -155,7 +157,7 @@ function createEmbed(title, description, color = COLORS.INFO, fields = []) {
         .setTitle(title)
         .setDescription(description)
         .setTimestamp()
-        .setFooter({ text: '🎮 Game Bot', iconURL: client.user?.displayAvatarURL() });
+        .setFooter({ text: '🎮 Game Bot' });
 
     if (fields.length > 0) {
         embed.addFields(fields);
@@ -211,7 +213,6 @@ function createTicTacToeBoard(game) {
 async function handleGuessCommand(message, args) {
     const userId = message.author.id;
 
-    // Bắt đầu game mới
     if (args.length === 0) {
         const game = new GuessGame();
         gameStates.set(userId, game);
@@ -230,7 +231,6 @@ async function handleGuessCommand(message, args) {
         return;
     }
 
-    // Đoán số
     const game = gameStates.get(userId);
     if (!game) {
         await message.reply('❌ Bạn chưa bắt đầu game! Gõ `!guess` để bắt đầu.');
@@ -278,7 +278,6 @@ async function handleTicTacToeCommand(message) {
     const rows = createTicTacToeBoard(game);
     const msg = await message.reply({ embeds: [embed], components: rows });
     
-    // Lưu game với message ID
     ticTacToeGames.set(msg.id, game);
     ticTacToeGames.delete(gameId);
 }
@@ -368,7 +367,7 @@ async function handleHelpCommand(message) {
 }
 
 // ==========================================
-// 8. XỬ LÝ BUTTON INTERACTION (Cờ Caro)
+// 8. XỬ LÝ BUTTON INTERACTION
 // ==========================================
 
 async function handleTicTacToeButton(interaction) {
@@ -392,13 +391,11 @@ async function handleTicTacToeButton(interaction) {
         return;
     }
 
-    // Người chơi đánh dấu X
     if (!game.makeMove(index, 'player')) {
         await interaction.reply({ content: '❌ Lỗi!', ephemeral: true });
         return;
     }
 
-    // Kiểm tra thắng
     let winner = game.checkWinner();
     if (winner) {
         const result = winner === 'X' ? '🎉 Bạn thắng!' : '😢 Bot thắng!';
@@ -420,7 +417,6 @@ async function handleTicTacToeButton(interaction) {
         return;
     }
 
-    // Update board
     const rows = createTicTacToeBoard(game);
     const embed = createEmbed(
         '🎮 Game Cờ Caro',
@@ -435,7 +431,6 @@ async function handleTicTacToeButton(interaction) {
     
     await interaction.update({ embeds: [embed], components: rows });
 
-    // Bot đánh dấu O (sau 1 giây)
     setTimeout(async () => {
         const updatedGame = ticTacToeGames.get(gameId);
         if (!updatedGame) return;
@@ -445,7 +440,6 @@ async function handleTicTacToeButton(interaction) {
 
         updatedGame.makeMove(botIndex, 'bot');
 
-        // Kiểm tra thắng
         const winner2 = updatedGame.checkWinner();
         if (winner2) {
             const result = winner2 === 'X' ? '🎉 Bạn thắng!' : '😢 Bot thắng!';
@@ -467,7 +461,6 @@ async function handleTicTacToeButton(interaction) {
             return;
         }
 
-        // Update board cho lượt người chơi
         const rows2 = createTicTacToeBoard(updatedGame);
         const embed2 = createEmbed(
             '🎮 Game Cờ Caro',
@@ -545,7 +538,6 @@ client.on(Events.MessageCreate, async (message) => {
 // 10. KHỞI ĐỘNG BOT
 // ==========================================
 
-// LẤY TOKEN TỪ BIẾN MÔI TRƯỜNG (Render sẽ tự động inject)
 const token = process.env.DISCORD_TOKEN;
 if (!token) {
     console.error('❌ Không tìm thấy DISCORD_TOKEN trong biến môi trường!');
@@ -558,7 +550,6 @@ client.login(token).catch(error => {
     process.exit(1);
 });
 
-// Xử lý lỗi không mong muốn
 process.on('unhandledRejection', error => {
     console.error('⚠️ Unhandled Rejection:', error);
 });
