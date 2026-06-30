@@ -16,21 +16,14 @@ module.exports = {
             .addStringOption(opt => opt.setName('type').setRequired(false)
                 .addChoices(
                     { name: 'Level', value: 'level' },
-                    { name: 'Coins', value: 'coins' },
-                    { name: 'PvP', value: 'pvp' }
+                    { name: 'Coins', value: 'coins' }
                 )))
         .addSubcommand(sub => sub
             .setName('prestige')
             .setDescription('Prestige your account'))
         .addSubcommand(sub => sub
             .setName('achievements')
-            .setDescription('View your achievements'))
-        .addSubcommand(sub => sub
-            .setName('dailyquest')
-            .setDescription('View daily quests'))
-        .addSubcommand(sub => sub
-            .setName('battlepass')
-            .setDescription('View battle pass progress')),
+            .setDescription('View your achievements')),
 
     cooldown: 3,
 
@@ -42,8 +35,6 @@ module.exports = {
             case 'leaderboard': return this.leaderboard(interaction);
             case 'prestige': return this.prestige(interaction);
             case 'achievements': return this.achievements(interaction);
-            case 'dailyquest': return this.dailyquest(interaction);
-            case 'battlepass': return this.battlepass(interaction);
             default: return interaction.reply('❌ Unknown progression command!');
         }
     },
@@ -71,9 +62,7 @@ module.exports = {
                 { name: '🛡️ DEF', value: `${user.stats.def}`, inline: true },
                 { name: '❤️ HP', value: `${user.stats.hp}/${user.stats.maxHp}`, inline: true },
                 { name: '⚡ Stamina', value: `${user.stats.stamina}/${user.stats.maxStamina}`, inline: true },
-                { name: '🐾 Pets', value: `${user.pets.length}`, inline: true },
-                { name: '🏆 PvP ELO', value: `${user.pvp.elo}`, inline: true },
-                { name: '🎯 Rank', value: `${user.rank}`, inline: true }
+                { name: '🐾 Pets', value: `${user.pets.length}`, inline: true }
             )
             .setFooter({ text: `Created: ${user.createdAt.toLocaleDateString()}` })
             .setTimestamp();
@@ -97,10 +86,6 @@ module.exports = {
                 users = await User.find().sort({ coins: -1 }).limit(10);
                 title = '💰 Coin Leaderboard';
                 break;
-            case 'pvp':
-                users = await User.find().sort({ 'pvp.elo': -1 }).limit(10);
-                title = '⚔️ PvP Leaderboard';
-                break;
         }
 
         if (users.length === 0) {
@@ -119,9 +104,6 @@ module.exports = {
                     break;
                 case 'coins':
                     value = `${user.coins.toLocaleString()} coins`;
-                    break;
-                case 'pvp':
-                    value = `${user.pvp.elo} ELO (${user.rank})`;
                     break;
             }
             embed.addFields({
@@ -178,7 +160,7 @@ module.exports = {
             .setTitle('🌟 Prestige')
             .setDescription(`Congratulations! You have reached Prestige ${user.prestige}!`)
             .addFields(
-                { name: 'Rewards', value: '✨ +50 Gems\n✨ Increased stats\n✨ New title', inline: true }
+                { name: 'Rewards', value: '✨ +50 Gems\n✨ Increased stats', inline: true }
             )
             .setTimestamp();
 
@@ -196,7 +178,6 @@ module.exports = {
             { name: 'Rich', desc: 'Get 100,000 coins', unlocked: user.coins >= 100000 },
             { name: 'Pet Collector', desc: 'Catch 5 pets', unlocked: user.pets.length >= 5 },
             { name: 'Boss Slayer', desc: 'Kill 5 bosses', unlocked: user.statistics.totalBossKills >= 5 },
-            { name: 'Dungeon Master', desc: 'Clear 10 dungeons', unlocked: user.statistics.totalDungeons >= 10 },
             { name: 'Legendary', desc: 'Reach level 50', unlocked: user.level >= 50 }
         ];
 
@@ -225,59 +206,6 @@ module.exports = {
         }
 
         embed.setTimestamp();
-        await interaction.editReply({ embeds: [embed] });
-    },
-
-    async dailyquest(interaction) {
-        await interaction.deferReply();
-        const user = await User.findOne({ userId: interaction.user.id });
-        if (!user) return interaction.editReply('❌ Create an account first!');
-
-        const quests = [
-            { name: 'Win 3 battles', progress: user.statistics.totalWins || 0, target: 3, reward: 500 },
-            { name: 'Earn 1000 coins', progress: user.totalEarned || 0, target: 1000, reward: 200 },
-            { name: 'Catch a pet', progress: user.pets.length, target: 1, reward: 300 },
-            { name: 'Complete 2 adventures', progress: user.statistics.totalAdventures || 0, target: 2, reward: 400 }
-        ];
-
-        const embed = new EmbedBuilder()
-            .setColor('#00BFFF')
-            .setTitle('📋 Daily Quests');
-
-        quests.forEach(quest => {
-            const completed = quest.progress >= quest.target;
-            embed.addFields({
-                name: `${completed ? '✅' : '⬜'} ${quest.name}`,
-                value: `Progress: ${quest.progress}/${quest.target} (Reward: ${quest.reward} coins)`,
-                inline: false
-            });
-        });
-
-        embed.setTimestamp();
-        await interaction.editReply({ embeds: [embed] });
-    },
-
-    async battlepass(interaction) {
-        await interaction.deferReply();
-        const user = await User.findOne({ userId: interaction.user.id });
-        if (!user) return interaction.editReply('❌ Create an account first!');
-
-        const tier = user.battlePass.tier || 0;
-        const exp = user.battlePass.exp || 0;
-        const expPerTier = 1000;
-        const progress = (exp / expPerTier) * 100;
-
-        const embed = new EmbedBuilder()
-            .setColor('#9B59B6')
-            .setTitle('🎖️ Battle Pass')
-            .setDescription(`Tier: **${tier}**\nProgress: **${Math.min(progress, 100).toFixed(1)}%**`)
-            .addFields(
-                { name: 'EXP', value: `${exp}/${expPerTier}`, inline: true },
-                { name: 'Rewards', value: '🎁 Premium rewards available!', inline: true }
-            )
-            .setFooter({ text: 'Complete quests to earn Battle Pass EXP!' })
-            .setTimestamp();
-
         await interaction.editReply({ embeds: [embed] });
     }
 };
